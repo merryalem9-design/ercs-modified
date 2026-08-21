@@ -19,6 +19,11 @@ const BASE_NAV = [
   { id: 'submissions', label: 'Submissions', sub: 'View all submitted entries', icon: BarChart3 },
 ];
 
+// National Activity AOP never creates Quarterly Plan/Actual entries — enforced
+// in AppContext's upsertQuarterlyPlan/upsertQuarterlyActual — so those two
+// nav items are hidden for that role rather than left as dead-end links.
+const RESTRICTED_FOR_AOP = new Set(['quarterly-plan', 'quarterly']);
+
 const isAssignedRole = (role: string) =>
   role.startsWith('Regional Coordinator — ') || role.startsWith('Project Coordinator — ');
 
@@ -48,7 +53,8 @@ export const Sidebar: React.FC = () => {
   const [planOpen, setPlanOpen] = useState(true);
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
 
-  const nav = BASE_NAV;
+  const isNationalAop = currentRole === 'National Activity AOP';
+  const nav = isNationalAop ? BASE_NAV.filter(item => !RESTRICTED_FOR_AOP.has(item.id)) : BASE_NAV;
 
   const roleHint = currentRole === 'National Activity AOP'
     ? 'Create National Activities, review coordinator submissions, and approve or reject proposals.'
@@ -77,7 +83,7 @@ export const Sidebar: React.FC = () => {
   const visibleNationalActivities = nationalActivities;
 
   const activityChildren = useMemo(() => {
-    const byActivity = new Map<
+    const byActivity = new Map
       string,
       { projects: { id: string; name: string }[]; regions: { id: string; name: string }[] }
     >();

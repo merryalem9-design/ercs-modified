@@ -184,6 +184,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 const updatePlanEntry = (pe: PlanEntry) => {
   if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP does not edit execution entries.'); return; }
   if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only edit entries for their assigned project or region.'); return; }
+
   setPlanEntries(prev => prev.map(x => (x.id === pe.id ? pe : x)));
   const na = nationalActivities.find(n => n.id === pe.national_activity_id);
   showToast(`Plan entry updated. ${na?.code || ''}'s aggregated Target/Budget recalculates automatically.`);

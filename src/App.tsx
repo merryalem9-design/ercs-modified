@@ -9,12 +9,26 @@ import { QuarterlyPlanPage } from './pages/QuarterlyPlanPage';
 import { QuarterlyEntryPage } from './pages/QuarterlyEntryPage';
 import { ReportPage } from './pages/ReportPage';
 import { NationalActivityDetailPage } from './pages/NationalActivityDetailPage';
-import { SubmissionsPage } from './pages/SubmissionsPage'; // correct path
+import { SubmissionsPage } from './pages/SubmissionsPage';
+
+// Quarterly Plan / Quarterly Actual Entry are not applicable to the
+// National Activity AOP role — it never owns a Region/Project scope to
+// submit them under (see AppContext's upsertQuarterlyPlan/upsertQuarterlyActual).
+const RESTRICTED_FOR_AOP = new Set(['quarterly-plan', 'quarterly']);
 
 const MainLayout: React.FC = () => {
-  const { activeRoute, setActiveRoute } = useApp();
+  const { activeRoute, setActiveRoute, currentRole } = useApp();
+  const isNationalAop = currentRole === 'National Activity AOP';
+  const onRestrictedRoute = isNationalAop && RESTRICTED_FOR_AOP.has(activeRoute);
+
+  // Covers a persisted activeRoute left over from a previous coordinator
+  // session before the role was switched to AOP directly in localStorage.
+  React.useEffect(() => {
+    if (onRestrictedRoute) setActiveRoute('plan');
+  }, [onRestrictedRoute, setActiveRoute]);
 
   const renderContent = () => {
+    if (onRestrictedRoute) return <PlanPage />;
     switch (activeRoute) {
       case 'plan': return <PlanPage />;
       case 'quarterly-plan': return <QuarterlyPlanPage />;

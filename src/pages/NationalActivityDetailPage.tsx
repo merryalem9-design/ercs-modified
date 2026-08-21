@@ -73,6 +73,11 @@ export const NationalActivityDetailPage: React.FC = () => {
     0
   );
 
+  // National Activity AOP has no assigned Region/Project of their own, so
+  // they neither create Plan Entries in isolation from a Region/Project
+  // scope nor create Quarterly Plan / Quarterly Actual entries at all —
+  // upsertQuarterlyPlan / upsertQuarterlyActual in AppContext both refuse
+  // that role outright. Those two actions are hidden here accordingly.
   const roleIsCoordinator = currentRole !== 'National Activity AOP';
   const regionalRole = currentRole.startsWith('Regional Coordinator — ');
   const projectRole = currentRole.startsWith('Project Coordinator — ');
@@ -168,12 +173,16 @@ export const NationalActivityDetailPage: React.FC = () => {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={goToQuarterlyPlan} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs">
-              <CalendarClock className="w-3.5 h-3.5" /> Quarterly Plan
-            </button>
-            <button onClick={goToQuarterlyActual} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 font-bold text-xs">
-              <CalendarCheck2 className="w-3.5 h-3.5" /> Quarterly Actuals
-            </button>
+            {roleIsCoordinator && (
+              <>
+                <button onClick={goToQuarterlyPlan} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs">
+                  <CalendarClock className="w-3.5 h-3.5" /> Quarterly Plan
+                </button>
+                <button onClick={goToQuarterlyActual} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 font-bold text-xs">
+                  <CalendarCheck2 className="w-3.5 h-3.5" /> Quarterly Actuals
+                </button>
+              </>
+            )}
             {canAddPlanEntry && (
               <button onClick={openAddPlanWizard} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ercs-red text-white font-bold text-xs">
                 <Plus className="w-3.5 h-3.5" /> Add Plan Entry

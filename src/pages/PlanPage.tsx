@@ -5,7 +5,7 @@ import { FilterBar } from '../components/common/FilterBar';
 import { sumTarget, sumBudget } from '../utils/calculations';
 import { buildActivityCode } from '../utils/activityCode';
 import { PlanEntry, ScopeType, Project } from '../types';
-import { ArrowUpRight, ChevronRight, Layers, Lock, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Layers, Plus, Save, Trash2, X } from 'lucide-react';
 
 interface PeWizardFormState {
   id?: string;
@@ -205,7 +205,7 @@ export const PlanPage: React.FC = () => {
             {filteredEntries.map(pe => {
               const na = nationalActivities.find(n => n.id === pe.national_activity_id);
               const scopeName = pe.scope_type === 'Regional' ? regions.find(r => r.id === pe.region_id)?.name : projects.find(p => p.id === pe.project_id)?.name;
-              const isLocked = pe.approval_status === 'Approved';
+
               return (
                 <tr key={pe.id} className="hover:bg-slate-50">
                   <td className="p-3 font-bold text-ercs-red">{pe.activity_code}</td>
@@ -221,15 +221,15 @@ export const PlanPage: React.FC = () => {
                   <td className="p-3 text-right">{pe.annual_budget.toLocaleString()}</td>
                   <td className="p-3 text-center"><span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">Approved</span></td>
                   <td className="p-3">
-                    <div className="flex items-center justify-center gap-2 flex-wrap">
-  {currentRole !== 'National Activity AOP' && (
-    <>
-      <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>
-      <button onClick={() => setDeleteTarget({ id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>
-    </>
-  )}
-</div>
-                  </td>
+  <div className="flex items-center justify-center gap-2 flex-wrap">
+    {currentRole !== 'National Activity AOP' && (
+      <>
+        <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>
+        <button onClick={() => setDeleteTarget({ id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>
+      </>
+    )}
+  </div>
+</td>
                 </tr>
               );
             })}
