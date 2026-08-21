@@ -2,13 +2,8 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Filter, RotateCcw } from 'lucide-react';
 
-interface Props {
-  showQuarter?: boolean;
-  showApprovalStatus?: boolean;
-}
-
-export const FilterBar: React.FC<Props> = ({ showQuarter = true, showApprovalStatus = false }) => {
-  const { filters, setFilters, resetFilters, currentRole, nationalActivities, regions, projects, quarters, reportApprovalStatus, setReportApprovalStatus } = useApp();
+export const FilterBar: React.FC = () => {
+  const { filters, setFilters, resetFilters, currentRole, nationalActivities, regions, projects, quarters } = useApp();
 
   const isRegionalRole = currentRole.startsWith('Regional Coordinator — ');
   const isProjectRole = currentRole.startsWith('Project Coordinator — ');
@@ -21,8 +16,6 @@ export const FilterBar: React.FC<Props> = ({ showQuarter = true, showApprovalSta
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => {
-      // A plan entry is either Regional or Project, never both — picking one
-      // clears the other so the filter combination can never return zero rows.
       if (name === 'regionId' && value !== 'ALL') return { ...prev, regionId: value, projectId: 'ALL' };
       if (name === 'projectId' && value !== 'ALL') return { ...prev, projectId: value, regionId: 'ALL' };
       return { ...prev, [name]: value };
@@ -41,7 +34,7 @@ export const FilterBar: React.FC<Props> = ({ showQuarter = true, showApprovalSta
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div>
+        <div>
           <label className="block text-[10px] font-bold text-slate-500 mb-1">National Activity</label>
           <select name="nationalActivityId" value={filters.nationalActivityId} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
             <option value="ALL">All National Activities</option>
@@ -66,25 +59,13 @@ export const FilterBar: React.FC<Props> = ({ showQuarter = true, showApprovalSta
             </select>
           </div>
         )}
-        {showQuarter && (
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 mb-1">Quarter</label>
-            <select name="quarterId" value={filters.quarterId} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
-              <option value="ALL">All Quarters (Annual)</option>
-              {quarters.map(q => <option key={q.id} value={q.id}>{q.id}</option>)}
-            </select>
-          </div>
-        )}
-        {showApprovalStatus && (
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 mb-1">Report Status</label>
-            <select value={reportApprovalStatus} onChange={e => setReportApprovalStatus(e.target.value as 'ALL' | 'Approved' | 'Draft')} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
-              <option value="Approved">Approved Report</option>
-              <option value="Draft">Draft / Pending Review</option>
-              <option value="ALL">All Statuses</option>
-            </select>
-          </div>
-        )}
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 mb-1">Quarter</label>
+          <select name="quarterId" value={filters.quarterId} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
+            <option value="ALL">All Quarters (Annual)</option>
+            {quarters.map(q => <option key={q.id} value={q.id}>{q.id}</option>)}
+          </select>
+        </div>
       </div>
     </div>
   );

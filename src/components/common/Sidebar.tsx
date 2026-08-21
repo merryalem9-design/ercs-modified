@@ -5,11 +5,10 @@ import {
   CalendarClock,
   CalendarCheck2,
   BarChart3,
-  ShieldCheck,
-  ChevronDown,
-  ChevronRight,
   FolderGit2,
   MapPin,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 const BASE_NAV = [
@@ -17,6 +16,7 @@ const BASE_NAV = [
   { id: 'quarterly-plan', label: 'Quarterly Plan', sub: 'Split targets into Q1–Q4', icon: CalendarClock },
   { id: 'quarterly', label: 'Quarterly Actual Entry', sub: 'Actuals vs quarterly plan', icon: CalendarCheck2 },
   { id: 'report', label: 'Report', sub: 'Aggregated results', icon: BarChart3 },
+  { id: 'submissions', label: 'Submissions', sub: 'View all submitted entries', icon: BarChart3 },
 ];
 
 const isAssignedRole = (role: string) =>
@@ -48,13 +48,7 @@ export const Sidebar: React.FC = () => {
   const [planOpen, setPlanOpen] = useState(true);
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
 
-  const nav = currentRole === 'National Activity AOP'
-    ? [
-        BASE_NAV[0],
-        { id: 'pending-approval', label: 'Pending Approval', sub: 'Review submitted proposals', icon: ShieldCheck },
-        BASE_NAV[3],
-      ]
-    : BASE_NAV;
+  const nav = BASE_NAV;
 
   const roleHint = currentRole === 'National Activity AOP'
     ? 'Create National Activities, review coordinator submissions, and approve or reject proposals.'
@@ -64,9 +58,6 @@ export const Sidebar: React.FC = () => {
 
   const roleScope = getRoleScope(currentRole);
 
-  // Never use raw planEntries for coordinator navigation. The sidebar is a
-  // role-filtered view: each Regional/Project Coordinator only sees their
-  // exact assigned Region/Project beneath every National Activity.
   const roleOwnedEntries = useMemo(() => {
     if (!isAssignedRole(currentRole)) return planEntries;
 
@@ -83,10 +74,6 @@ export const Sidebar: React.FC = () => {
       : [];
   }, [currentRole, roleScope.kind, roleScope.name, planEntries, regions, projects]);
 
-  // Every user can see the National Activity parents. The role restriction
-  // applies to the child Region/Project entries underneath them. This lets a
-  // coordinator choose any National Activity and add their own execution
-  // entry without exposing another user's existing execution rows.
   const visibleNationalActivities = nationalActivities;
 
   const activityChildren = useMemo(() => {

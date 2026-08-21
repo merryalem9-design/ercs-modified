@@ -1,17 +1,7 @@
 // src/pages/QuarterlyEntryPage.tsx
-// STEP 3 of the pipeline — report the Actual achieved this quarter. Compared
-// against that quarter's Quarterly Plan (Step 2) for a "Quarterly
-// Achievement %", and still rolls up into a Cumulative Achievement against
-// the annual target (Step 1) for the year-to-date picture.
-//
-// Like Quarterly Plan, each quarter's Actual has its own approval workflow:
-// typing a value saves it as Draft; "Submit for Approval" moves it to
-// Pending; the National Activity AOP approves or rejects it. Once Approved,
-// the quarter locks — the Coordinator can no longer edit it.
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { FilterBar } from '../components/common/FilterBar';
-import { ApprovalStatusBadge } from '../components/common/ApprovalStatusBadge';
 import { achievementPct, budgetUtilizationPct, convertToBeneficiaries, sumActual } from '../utils/calculations';
 import { PlanEntry, QuarterId } from '../types';
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -29,13 +19,12 @@ export const QuarterlyEntryPage: React.FC = () => {
         <p className="text-xs text-slate-500 mt-1">
           Enter the Actual value achieved this quarter for each plan entry. It's compared against that quarter's
           Quarterly Plan (set on the previous step) for a Quarterly Achievement %, and still rolls up into the
-          Cumulative Achievement against the annual target. Beneficiaries convert live as you type. Submit each
-          quarter for the National Activity AOP's approval — only Approved quarters are counted in the live
-          Approved report, and once Approved a quarter is locked from further edits.
+          Cumulative Achievement against the annual target. Beneficiaries convert live as you type.
+          All entries are automatically approved and immediately included in aggregates.
         </p>
       </div>
 
-      <FilterBar showQuarter={false} />
+      <FilterBar />
 
       <div className="bg-white p-1.5 rounded-lg border inline-flex gap-1">
         {quarters.map(q => (
@@ -66,12 +55,6 @@ export const QuarterlyEntryPage: React.FC = () => {
   );
 };
 
-// Number inputs' min="0" is only a UI hint — the browser does not stop the
-// value "-100" from being typed and committed. Without this clamp, a
-// negative Actual or Expenditure flows straight into quarterlyActuals and
-// from there into every downstream number: achievement %s here, Target vs
-// Actual / Budget Utilization / Beneficiaries on the Detail page, and every
-// KPI, chart and table on the Report page.
 const clampNonNegative = (raw: string): number => {
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
@@ -80,26 +63,19 @@ const clampNonNegative = (raw: string): number => {
 const EntryRow: React.FC<{
   entry: PlanEntry; quarter: QuarterId; nationalActivityCode: string; uom: string; scopeLabel?: string;
 }> = ({ entry, quarter, nationalActivityCode, uom, scopeLabel }) => {
-  const { quarterlyActuals, upsertQuarterlyActual, submitQuarterlyActual, quarterlyPlans, uomConfigs, setFilters, setActiveRoute } = useApp();
+  const { quarterlyActuals, upsertQuarterlyActual, quarterlyPlans, uomConfigs, setFilters, setActiveRoute } = useApp();
   const existing = quarterlyActuals.find(a => a.plan_entry_id === entry.id && a.quarter_id === quarter);
   const [actualVal, setActualVal] = useState<number>(existing?.actual ?? 0);
   const [expVal, setExpVal] = useState<number>(existing?.expenditure ?? 0);
   const [commentVal, setCommentVal] = useState<string>(existing?.comment ?? '');
 
-  // Keep local inputs in sync if the underlying quarter/entry selection changes.
   React.useEffect(() => {
     setActualVal(existing?.actual ?? 0);
     setExpVal(existing?.expenditure ?? 0);
     setCommentVal(existing?.comment ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry.id, quarter]);
-
-  const isApproved = existing?.approval_status === 'Approved';
-  const canSubmit = !!existing && (existing.approval_status === 'Draft' || existing.approval_status === 'Rejected');
-  const submitId = existing?.id;
+  }, [entry.id, quarter, existing]);
 
   const sync = (nextActual: number, nextExp: number, nextComment = commentVal) => {
-    if (isApproved) return; // defensive — inputs are disabled for this case anyway
     upsertQuarterlyActual({ id: existing?.id || `qa-${entry.id}-${quarter}`, plan_entry_id: entry.id, quarter_id: quarter, actual: nextActual, expenditure: nextExp, comment: nextComment });
   };
 
@@ -115,8 +91,6 @@ const EntryRow: React.FC<{
     sync(actualVal, v, commentVal);
   };
 
-  // THE COMPARISON THE USER ASKED FOR: this quarter's Actual measured
-  // against this quarter's Quarterly Plan (Step 2) — not the annual target.
   const planForQuarter = quarterlyPlans.find(qp => qp.plan_entry_id === entry.id && qp.quarter_id === quarter);
   const plannedTarget = planForQuarter?.target ?? 0;
   const plannedBudget = planForQuarter?.budget ?? 0;
@@ -125,11 +99,6 @@ const EntryRow: React.FC<{
   const quarterlyBudgetUtil = budgetUtilizationPct(expVal, plannedBudget);
   const isOverBudget = quarterlyBudgetUtil > 100;
 
-  // quarterlyActuals already reflects the latest edit: sync() above updates context
-  // state in the same batched event, so this stays accurate on every keystroke.
-  // This cumulative figure intentionally includes ALL entered quarters
-  // regardless of their individual approval status — it's the Coordinator's
-  // own working view of progress, not the Report page's Approved-only tally.
   const cumulativeActual = sumActual([entry], quarterlyActuals);
   const cumulativeAchievement = achievementPct(cumulativeActual, entry.annual_target);
   const beneficiariesThisQuarter = convertToBeneficiaries(actualVal, uom, uomConfigs);
@@ -156,12 +125,7 @@ const EntryRow: React.FC<{
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <div className="text-[10px] bg-slate-100 px-2 py-1 rounded font-semibold whitespace-nowrap">Annual Target: {entry.annual_target.toLocaleString()} {uom}</div>
           <div className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded font-semibold whitespace-nowrap">Planned {quarter}: {plannedTarget.toLocaleString()} {uom} · ETB {plannedBudget.toLocaleString()}</div>
-          {existing && <ApprovalStatusBadge status={existing.approval_status} />}
-          {canSubmit && (
-            <button onClick={() => submitId && submitQuarterlyActual(submitId)} className="bg-ercs-red text-white px-2.5 py-1 rounded text-[10px] font-bold whitespace-nowrap">
-              Submit for Approval
-            </button>
-          )}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">Approved</span>
         </div>
       </div>
 
@@ -180,29 +144,18 @@ const EntryRow: React.FC<{
         </div>
       )}
 
-      {isApproved && (
-        <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-[11px] text-emerald-800 font-semibold">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> This quarter's Actual is approved and locked — it's included in the live Approved report. Editing is disabled.
-        </div>
-      )}
-      {existing?.approval_status === 'Rejected' && existing.rejection_reason && (
-        <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-[11px] text-rose-800 font-semibold">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Rejected: {existing.rejection_reason} — edit and resubmit.
-        </div>
-      )}
-
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-[10px] font-bold text-slate-500 mb-1">Actual this quarter ({uom})</label>
-          <input type="number" min="0" value={actualVal} disabled={isApproved} onChange={e => handleActualChange(e.target.value)} className={`w-32 text-xs p-2 border rounded ${isApproved ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''}`} />
+          <input type="number" min="0" value={actualVal} onChange={e => handleActualChange(e.target.value)} className="w-32 text-xs p-2 border rounded" />
         </div>
         <div>
           <label className="block text-[10px] font-bold text-slate-500 mb-1">Expenditure this quarter (ETB)</label>
-          <input type="number" min="0" value={expVal} disabled={isApproved} onChange={e => handleExpChange(e.target.value)} className={`w-36 text-xs p-2 border rounded ${isApproved ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : isOverBudget ? 'border-rose-300 bg-rose-50' : ''}`} />
+          <input type="number" min="0" value={expVal} onChange={e => handleExpChange(e.target.value)} className={`w-36 text-xs p-2 border rounded ${isOverBudget ? 'border-rose-300 bg-rose-50' : ''}`} />
         </div>
         <div className="min-w-64 flex-1">
           <label className="block text-[10px] font-bold text-slate-500 mb-1">Comment</label>
-          <textarea rows={2} value={commentVal} disabled={isApproved} onChange={e => { setCommentVal(e.target.value); sync(actualVal, expVal, e.target.value); }} placeholder="Add a note about the reported actual or expenditure" className={`w-full text-xs p-2 border rounded resize-y ${isApproved ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`} />
+          <textarea rows={2} value={commentVal} onChange={e => { setCommentVal(e.target.value); sync(actualVal, expVal, e.target.value); }} placeholder="Add a note about the reported actual or expenditure" className="w-full text-xs p-2 border rounded resize-y bg-white" />
         </div>
 
         <div className="flex items-center gap-2 ml-auto flex-wrap">

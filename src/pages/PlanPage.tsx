@@ -1,17 +1,14 @@
 // src/pages/PlanPage.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { FilterBar } from '../components/common/FilterBar';
-import { ApprovalStatusBadge } from '../components/common/ApprovalStatusBadge';
 import { sumTarget, sumBudget } from '../utils/calculations';
 import { buildActivityCode } from '../utils/activityCode';
 import { NationalActivity, PlanEntry, ScopeType, Region, Zone, Project, Responsibility } from '../types';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, ChevronRight, Layers, Lock, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Layers, Lock, Plus, Save, Trash2, X } from 'lucide-react';
 
 const RESPONSIBILITY_OPTIONS: Responsibility[] = ['HQ', 'Branch', 'Both'];
 
-// Form shape used by the Add Plan wizard. Kept as strings for controlled
-// number inputs; converted to numbers only when the PlanEntry is built.
 interface PeWizardFormState {
   id?: string;
   strategicPriorityId: string;
@@ -25,14 +22,7 @@ interface PeWizardFormState {
   activity_description: string;
 }
 
-// Sentinel the UoM dropdown uses to mean "let me define a brand new unit"
-// instead of picking one that's already in the Conversion Factors list.
 const OTHER_UOM = '__OTHER__';
-
-// These two ship with the app and back the core beneficiary math — their
-// conversion factor is intentionally never editable from the UI. Any other
-// UoM, including ones created via "Other" below, can be tuned freely from
-// the Conversion Factors list.
 const LOCKED_UOMS = new Set(['Person', 'House Hold (HH)']);
 
 const clampFactor = (raw: string): number => {
@@ -40,12 +30,6 @@ const clampFactor = (raw: string): number => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
-// Form shape used by the National Activity modal. Extends the persisted
-// NationalActivity fields with two transient ones that only apply while
-// OTHER_UOM is selected in the UoM dropdown — the new unit's name and its
-// starting conversion factor (defaults to "1", since it's often just the
-// label that differs, e.g. "# of Agreements" vs "# of Boats", not the
-// beneficiary math).
 type NationalActivityFormState = Partial<NationalActivity> & {
   customUomName?: string;
   customUomValue?: string;
@@ -56,8 +40,7 @@ export const PlanPage: React.FC = () => {
     nationalActivities, addNationalActivity, updateNationalActivity, deleteNationalActivity,
     regions, zones, projects, planEntries, deletePlanEntry,
     uomConfigs, updateUomFactor, filters, getFilteredPlanEntries,
-    setSelectedNationalActivityId, setActiveRoute,
-    pendingAddPlanNationalActivityId, setPendingAddPlanNationalActivityId, currentRole,
+    setSelectedNationalActivityId, setActiveRoute, currentRole,
   } = useApp();
 
   const [naForm, setNaForm] = useState<null | NationalActivityFormState>(null);
@@ -66,39 +49,6 @@ export const PlanPage: React.FC = () => {
 
   const filteredEntries = getFilteredPlanEntries();
 
-  // Consumes the one-shot "open the Add Plan wizard for this National
-  // Activity" signal set by NationalActivityDetailPage's "+ Add Plan Entry"
-  // button. Opens straight at Step 2 with the parent already locked in,
-  // then clears the signal so it never re-fires.
-  useEffect(() => {
-    if (!pendingAddPlanNationalActivityId) return;
-    const na = nationalActivities.find(n => n.id === pendingAddPlanNationalActivityId);
-    if (na) {
-      const regionalRole = currentRole.startsWith('Regional Coordinator — ');
-      const projectRole = currentRole.startsWith('Project Coordinator — ');
-      const assignedRegion = regionalRole ? regions.find(r => r.name === currentRole.slice('Regional Coordinator — '.length)) : undefined;
-      const assignedProject = projectRole ? projects.find(p => p.name === currentRole.slice('Project Coordinator — '.length)) : undefined;
-      setPeWizard({
-        initial: {
-          strategicPriorityId: na.strategic_priority_id,
-          national_activity_id: na.id,
-          scope_type: regionalRole ? 'Regional' : projectRole ? 'Project' : 'Regional',
-          region_id: assignedRegion?.id || '',
-          project_id: assignedProject?.id || '',
-          annual_target: '',
-          annual_budget: '',
-          activity_name: '',
-          activity_description: '',
-        },
-        startStep: 2,
-      });
-    }
-    setPendingAddPlanNationalActivityId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAddPlanNationalActivityId]);
-
-  // Which National Activities to show reconciliation + entries for, based on the
-  // National Activity filter at the top.
   const visibleNationalActivities = nationalActivities.filter(na => {
     if (filters.nationalActivityId !== 'ALL' && na.id !== filters.nationalActivityId) return false;
     return true;
@@ -111,19 +61,8 @@ export const PlanPage: React.FC = () => {
 
   const saveNa = () => {
     if (!naForm) return;
-    // National Activity annual Target/Budget are fixed parent ceilings, set
-    // once and then locked as soon as any Plan Entry links to this National
-    // Activity (see the read-only "Ceiling" fields in NationalActivityModal
-    // below — the inputs are hidden and disabled once hasChildren is true,
-    // so naForm.annual_target/annual_budget always still carry the correct,
-    // unmodified ceiling value here, whether the NA has children or not).
     const manualTarget = Number(naForm.annual_target);
     const manualBudget = Number(naForm.annual_budget);
-
-    // "Other" UoM: the dropdown carries the OTHER_UOM sentinel while the
-    // real new unit's name/value live in customUomName/customUomValue.
-    // Resolve the actual uom string that gets saved on the National
-    // Activity here.
     const isOtherUom = naForm.uom === OTHER_UOM;
     const resolvedUom = isOtherUom ? (naForm.customUomName || '').trim() : (naForm.uom || '').trim();
 
@@ -140,19 +79,9 @@ export const PlanPage: React.FC = () => {
       annual_budget: Number.isFinite(manualBudget) && manualBudget >= 0 ? manualBudget : 0,
     };
     if (!na.code || !na.description || !na.uom || !na.strategic_priority_id) return;
-    // Defensive re-check (mirrors the NationalActivityModal's own guard):
-    // two National Activities sharing a code would be visually
-    // indistinguishable in every Report table and filter dropdown, since
-    // those are all labeled by code, not id.
     const isDuplicateCode = nationalActivities.some(other => other.id !== na.id && other.code.trim().toLowerCase() === na.code.toLowerCase());
     if (isDuplicateCode) return;
 
-    // Brand-new "Other" UoM: sync it into the shared Conversion Factors
-    // list (defaulting to the value entered, normally 1) so the Report
-    // page's beneficiary conversion picks it up immediately, and so it
-    // shows up as an editable card below. Only added if it doesn't already
-    // exist — Person and House Hold (HH), and any UoM created this way
-    // before, are never touched here.
     if (isOtherUom && resolvedUom) {
       const alreadyExists = uomConfigs.some(cfg => cfg.uom.trim().toLowerCase() === resolvedUom.toLowerCase());
       if (!alreadyExists) {
@@ -218,9 +147,8 @@ export const PlanPage: React.FC = () => {
         </p>
       </div>
 
-      <FilterBar showQuarter={false} />
+      <FilterBar />
 
-      {/* National Activities */}
       <section className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -237,9 +165,6 @@ export const PlanPage: React.FC = () => {
         </div>
         <div className="divide-y">
           {visibleNationalActivities.map(na => {
-            // National totals/reconciliation use ALL execution entries so the
-            // parent aggregation remains correct. The visible child count is
-            // role-filtered so coordinators never see other users' entries.
             const allChildren = planEntries.filter(pe => pe.national_activity_id === na.id);
             const children = filteredEntries.filter(pe => pe.national_activity_id === na.id);
             const childTarget = sumTarget(allChildren);
@@ -298,7 +223,6 @@ export const PlanPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Conversion factors */}
       <section className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
         <div className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b pb-3">Conversion Factors (UoM → Beneficiaries)</div>
         <p className="text-[11px] text-slate-500 -mt-1">This is the multiplier the Report page uses to turn a reported Actual into Beneficiaries Reached. Person and House Hold (HH) are fixed; any UoM added via "Other" on a National Activity can be fine-tuned here.</p>
@@ -309,7 +233,6 @@ export const PlanPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Plan entries */}
       <section className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between bg-slate-50">
           <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">Execution Plan Entries ({filteredEntries.length})</div>
@@ -339,12 +262,10 @@ export const PlanPage: React.FC = () => {
                   </td>
                   <td className="p-3 text-right font-bold">{pe.annual_target.toLocaleString()} {na?.uom}</td>
                   <td className="p-3 text-right">{pe.annual_budget.toLocaleString()}</td>
-                  <td className="p-3 text-center"><ApprovalStatusBadge status={pe.approval_status} /></td>
+                  <td className="p-3 text-center"><span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">Approved</span></td>
                   <td className="p-3">
                     <div className="flex items-center justify-center gap-2 flex-wrap">
-                      {currentRole === 'National Activity AOP' && <span className="text-[10px] text-slate-400 font-semibold">Approval controlled from Pending Approval</span>}
                       {currentRole !== 'National Activity AOP' && !isLocked && <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>}
-                      {currentRole !== 'National Activity AOP' && (pe.approval_status === 'Draft' || pe.approval_status === 'Rejected') && <SubmitButton planEntryId={pe.id} />}
                       {currentRole !== 'National Activity AOP' && !isLocked && <button onClick={() => setDeleteTarget({ type: 'pe', id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>}
                       {currentRole !== 'National Activity AOP' && isLocked && (
                         <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">
@@ -384,6 +305,9 @@ export const PlanPage: React.FC = () => {
   );
 };
 
+// ============================================================
+// NationalActivityModal
+// ============================================================
 const NationalActivityModal: React.FC<{ form: NationalActivityFormState; setForm: any; onSave: () => void; onClose: () => void }> = ({ form, setForm, onSave, onClose }) => {
   const { uomConfigs, regions, zones, addRegion, addZone, planEntries, nationalActivities } = useApp();
 
@@ -654,6 +578,9 @@ const NationalActivityModal: React.FC<{ form: NationalActivityFormState; setForm
   );
 };
 
+// ============================================================
+// PlanEntryWizardModal
+// ============================================================
 const PlanEntryWizardModal: React.FC<{
   initial: PeWizardFormState;
   startStep: 1 | 2;
@@ -748,7 +675,7 @@ const PlanEntryWizardModal: React.FC<{
       activity_code: buildActivityCode(selectedNa, effectiveScope, form.region_id, form.project_id, regions, projects),
       activity_name: form.activity_name.trim(),
       activity_description: form.activity_description.trim(),
-      approval_status: 'Draft',
+      approval_status: 'Approved',
     };
     if (isEditing) updatePlanEntry(pe); else addPlanEntry(pe);
     onSaved();
@@ -940,11 +867,9 @@ const PlanEntryWizardModal: React.FC<{
   );
 };
 
-const SubmitButton: React.FC<{ planEntryId: string }> = ({ planEntryId }) => {
-  const { submitPlanEntry } = useApp();
-  return <button onClick={() => submitPlanEntry(planEntryId)} className="px-2.5 py-1 rounded bg-amber-50 text-amber-800 font-bold">Submit</button>;
-};
-
+// ============================================================
+// Helper Components
+// ============================================================
 const StepPill: React.FC<{ num: number; label: string; active: boolean; done: boolean }> = ({ num, label, active, done }) => (
   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold ${active ? 'bg-red-50 text-ercs-red' : done ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400'}`}>
     <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${active ? 'bg-ercs-red text-white' : done ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'}`}>{num}</span>
@@ -964,7 +889,7 @@ const UomFactorCard: React.FC<{ uom: string; factor: number }> = ({ uom, factor 
   const locked = LOCKED_UOMS.has(uom);
   const [draft, setDraft] = useState(String(factor));
 
-  useEffect(() => { setDraft(String(factor)); }, [factor]);
+  React.useEffect(() => { setDraft(String(factor)); }, [factor]);
 
   if (locked) {
     return (
