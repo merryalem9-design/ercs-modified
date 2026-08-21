@@ -39,7 +39,10 @@ export const SubmissionsPage: React.FC = () => {
                   : projects.find(p => p.id === pe.project_id)?.name;
                 return (
                   <tr key={pe.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-bold text-ercs-red">{pe.activity_code}</td>
+                    {/* Always the parent National Activity's own code — never a
+                        Region/Project-suffixed variant, regardless of what may
+                        be stored on the entry itself. */}
+                    <td className="p-3 font-bold text-ercs-red">{na?.code}</td>
                     <td className="p-3 min-w-72"><div className="font-bold text-slate-800">{pe.activity_name}</div><div className="text-[10px] text-slate-500 mt-0.5">{pe.activity_description}</div></td>
                     <td className="p-3"><span className="font-semibold">{scopeName || '—'}</span><div className="text-[10px] text-slate-400">{pe.scope_type}</div></td>
                     <td className="p-3 text-right font-bold">{pe.annual_target.toLocaleString()} {na?.uom}</td>

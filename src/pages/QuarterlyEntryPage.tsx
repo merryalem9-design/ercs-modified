@@ -117,7 +117,10 @@ const EntryRow: React.FC<{
     <div className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
         <div>
-          <span className="bg-ercs-red text-white text-[10px] font-extrabold px-2 py-0.5 rounded mr-2">{entry.activity_code || nationalActivityCode}</span>
+          {/* Always the parent National Activity's own code — never a
+              Region/Project-suffixed variant, regardless of what may be
+              stored on the entry itself. */}
+          <span className="bg-ercs-red text-white text-[10px] font-extrabold px-2 py-0.5 rounded mr-2">{nationalActivityCode}</span>
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${entry.scope_type === 'Regional' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{entry.scope_type}</span>
           <span className="ml-2 text-xs font-bold text-slate-800">{scopeLabel}</span>
           <div className="text-[10px] text-slate-500 mt-1 max-w-2xl"><b>{entry.activity_name}</b> — {entry.activity_description}</div>

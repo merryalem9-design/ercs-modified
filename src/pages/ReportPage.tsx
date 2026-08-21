@@ -284,7 +284,7 @@ const ExecutionEntriesTable: React.FC<{
             <th className="p-3 text-right">Achievement %</th>
             <th className="p-3 text-right">Budget (ETB)</th>
             <th className="p-3 text-right">Spent (ETB)</th>
-            <th className="p-3 text-right">Utilization %</th>
+            <th className="p-3 text-right">Utilisation %</th>
             <th className="p-3 text-right">Total Beneficiaries</th>
             <th className="p-3 text-right">Actual Beneficiaries</th>
             <th className="p-3 text-right">Beneficiary %</th>
@@ -310,7 +310,10 @@ const ExecutionEntriesTable: React.FC<{
 
             return (
               <tr key={pe.id} className="hover:bg-slate-50">
-                <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{pe.activity_code}</td>
+                {/* Always the parent National Activity's own code — never a
+                    Region/Project-suffixed variant, regardless of what may be
+                    stored on the entry itself. */}
+                <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{na?.code}</td>
                 <td className="p-3 min-w-40 font-bold text-slate-800">{pe.activity_name}</td>
                 <td className="p-3 min-w-56 text-slate-500">{pe.activity_description}</td>
                 <td className="p-3 whitespace-nowrap text-slate-500 font-semibold">{na?.uom}</td>
@@ -385,7 +388,7 @@ const NationalActivityReportTable: React.FC<{ rows: NationalActivityRow[] }> = (
             <th className="p-3 text-right">Achievement %</th>
             <th className="p-3 text-right">Budget (ETB)</th>
             <th className="p-3 text-right">Spent (ETB)</th>
-            <th className="p-3 text-right">Utilization %</th>
+            <th className="p-3 text-right">Utilisation %</th>
             <th className="p-3 text-right">Total Beneficiaries</th>
             <th className="p-3 text-right">Actual Beneficiaries</th>
             <th className="p-3 text-right">Beneficiary %</th>
@@ -454,7 +457,7 @@ const ScopeReportTable: React.FC<{ title: string; rows: ScopeRow[] }> = ({ title
             <th className="p-3 text-right">Achievement %</th>
             <th className="p-3 text-right">Budget (ETB)</th>
             <th className="p-3 text-right">Spent (ETB)</th>
-            <th className="p-3 text-right">Utilization %</th>
+            <th className="p-3 text-right">Utilisation %</th>
             <th className="p-3 text-right">Total Beneficiaries</th>
             <th className="p-3 text-right">Actual Beneficiaries</th>
             <th className="p-3 text-right">Beneficiary %</th>

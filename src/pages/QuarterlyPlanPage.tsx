@@ -112,7 +112,10 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
 
   return (
     <tr className="hover:bg-slate-50 align-top">
-      <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{entry.activity_code}</td>
+      {/* Always the parent National Activity's own code — never a
+          Region/Project-suffixed variant, regardless of what may be
+          stored on the entry itself. */}
+      <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{na?.code}</td>
       <td className="p-3 min-w-72"><div className="font-bold text-slate-800">{entry.activity_name}</div><div className="text-[10px] text-slate-500 mt-0.5">{entry.activity_description}</div></td>
       <td className="p-3 whitespace-nowrap">
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${entry.scope_type === 'Regional' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{entry.scope_type}</span>
