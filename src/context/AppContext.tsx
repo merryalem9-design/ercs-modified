@@ -87,8 +87,8 @@ const roleOwnsPlanEntry = (role: UserRole, pe: PlanEntry, regions: Region[], pro
 
 const normalizePersistedRole = (raw: UserRole, regions: Region[], projects: Project[]): UserRole => {
   if (raw === 'National Activity AOP') return raw;
-  if (raw === 'Regional Coordinator') return regions[0] ? `Regional Coordinator — ${regions[0].name}` : 'National Activity AOP';
-  if (raw === 'Project Coordinator') return projects[0] ? `Project Coordinator — ${projects[0].name}` : 'National Activity AOP';
+  //if (raw === 'Regional Coordinator') return regions[0] ? `Regional Coordinator — ${regions[0].name}` : 'National Activity AOP';
+  //if (raw === 'Project Coordinator') return projects[0] ? `Project Coordinator — ${projects[0].name}` : 'National Activity AOP';
   if (parseRoleScope(raw, regions, projects).kind !== 'National') return raw;
   return 'National Activity AOP';
 };
@@ -181,28 +181,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : 'Plan entry added.');
   };
 
-  const updatePlanEntry = (pe: PlanEntry) => {
-    if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP does not edit execution entries.'); return; }
-    if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only edit entries for their assigned project or region.'); return; }
-    const old = planEntries.find(x => x.id === pe.id);
-    if (old?.approval_status === 'Approved') { showToast('This plan entry is already approved and locked. It can no longer be edited.'); return; }
+const updatePlanEntry = (pe: PlanEntry) => {
+  if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP does not edit execution entries.'); return; }
+  if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only edit entries for their assigned project or region.'); return; }
+  setPlanEntries(prev => prev.map(x => (x.id === pe.id ? pe : x)));
+  const na = nationalActivities.find(n => n.id === pe.national_activity_id);
+  showToast(`Plan entry updated. ${na?.code || ''}'s aggregated Target/Budget recalculates automatically.`);
+};
 
-    setPlanEntries(prev => prev.map(x => (x.id === pe.id ? pe : x)));
-    const na = nationalActivities.find(n => n.id === pe.national_activity_id);
-    showToast(`Plan entry updated. ${na?.code || ''}'s aggregated Target/Budget recalculates automatically.`);
-  };
-
-  const deletePlanEntry = (id: string) => {
-    if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP does not delete execution entries.'); return; }
-    const old = planEntries.find(x => x.id === id);
-    if (!old) return;
-    if (!roleOwnsPlanEntry(currentRole, old, regions, projects)) { showToast('This coordinator can only delete entries for their assigned project or region.'); return; }
-    if (old.approval_status === 'Approved') { showToast('This plan entry is already approved and locked. It can no longer be deleted.'); return; }
-    setPlanEntries(prev => prev.filter(x => x.id !== id));
-    setQuarterlyPlans(prev => prev.filter(qp => qp.plan_entry_id !== id));
-    setQuarterlyActuals(prev => prev.filter(a => a.plan_entry_id !== id));
-    showToast("Plan entry, its quarterly plan and its quarterly actuals deleted. The parent National Activity's aggregated Target/Budget updates automatically.");
-  };
+const deletePlanEntry = (id: string) => {
+  if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP does not delete execution entries.'); return; }
+  const old = planEntries.find(x => x.id === id);
+  if (!old) return;
+  if (!roleOwnsPlanEntry(currentRole, old, regions, projects)) { showToast('This coordinator can only delete entries for their assigned project or region.'); return; }
+  setPlanEntries(prev => prev.filter(x => x.id !== id));
+  setQuarterlyPlans(prev => prev.filter(qp => qp.plan_entry_id !== id));
+  setQuarterlyActuals(prev => prev.filter(a => a.plan_entry_id !== id));
+  showToast("Plan entry, its quarterly plan and its quarterly actuals deleted. The parent National Activity's aggregated Target/Budget updates automatically.");
+};
 
   // ---------------------------------------------------------------------
   // QUARTERLY PLAN – automatically Approved.

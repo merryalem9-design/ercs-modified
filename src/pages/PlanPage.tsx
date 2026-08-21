@@ -222,14 +222,13 @@ export const PlanPage: React.FC = () => {
                   <td className="p-3 text-center"><span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">Approved</span></td>
                   <td className="p-3">
                     <div className="flex items-center justify-center gap-2 flex-wrap">
-                      {currentRole !== 'National Activity AOP' && !isLocked && <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>}
-                      {currentRole !== 'National Activity AOP' && !isLocked && <button onClick={() => setDeleteTarget({ id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>}
-                      {currentRole !== 'National Activity AOP' && isLocked && (
-                        <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">
-                          <Lock className="w-3 h-3" /> Approved &amp; locked
-                        </span>
-                      )}
-                    </div>
+  {currentRole !== 'National Activity AOP' && (
+    <>
+      <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>
+      <button onClick={() => setDeleteTarget({ id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>
+    </>
+  )}
+</div>
                   </td>
                 </tr>
               );

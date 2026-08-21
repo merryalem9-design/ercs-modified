@@ -18,16 +18,16 @@ export const INITIAL_STRATEGIC_PRIORITIES: StrategicPriority[] = [
 
 // National Activities with totals computed from the sheets.
 export const INITIAL_NATIONAL_ACTIVITIES: NationalActivity[] = [
-  { id: 'na-1-1-1', strategic_priority_id: 'sp-1', code: '1.1.1', description: 'Distribute NFI Kits to IDP Households', uom: '# of households', responsibility: 'Both', annual_target: 16450, annual_budget: 11_600_000 },
-  { id: 'na-1-1-2', strategic_priority_id: 'sp-1', code: '1.1.2', description: 'Update Woreda-Level Emergency Response Plans', uom: '# of MHCP', responsibility: 'Both', annual_target: 5, annual_budget: 850_000 },
-  { id: 'na-1-2-1', strategic_priority_id: 'sp-1', code: '1.2.1', description: 'Rehabilitate Boreholes in Project Woredas', uom: '# of water points', responsibility: 'Both', annual_target: 27, annual_budget: 12_200_000 },
-  { id: 'na-1-2-2', strategic_priority_id: 'sp-1', code: '1.2.2', description: 'Provide Emergency Health and First Aid Services', uom: '# of people reached', responsibility: 'Both', annual_target: 14700, annual_budget: 6_400_000 },
-  { id: 'na-2-1-1', strategic_priority_id: 'sp-1', code: '2.1.1', description: 'Conduct Community-Based Disaster Risk Reduction (CBDRR) Training', uom: '# of people trained', responsibility: 'Both', annual_target: 920, annual_budget: 1_250_000 },
-  { id: 'na-2-1-2', strategic_priority_id: 'sp-1', code: '2.1.2', description: 'Establish Community-Based Early Warning Systems', uom: '# of systems established', responsibility: 'Both', annual_target: 12, annual_budget: 2_000_000 },
-  { id: 'na-3-1-1', strategic_priority_id: 'sp-1', code: '3.1.1', description: 'Provide Nutrition Support to Vulnerable Groups', uom: '# of beneficiaries', responsibility: 'Both', annual_target: 4700, annual_budget: 3_850_000 },
-  { id: 'na-3-2-1', strategic_priority_id: 'sp-1', code: '3.2.1', description: 'Conduct Health and Hygiene Awareness Campaigns', uom: '# of campaigns', responsibility: 'Both', annual_target: 25, annual_budget: 1_020_000 },
-  { id: 'na-4-1-1', strategic_priority_id: 'sp-1', code: '4.1.1', description: 'Recruit and Train Community Volunteers', uom: '# of volunteers trained', responsibility: 'Both', annual_target: 900, annual_budget: 1_280_000 },
-  { id: 'na-5-1-1', strategic_priority_id: 'sp-1', code: '5.1.1', description: 'Organize Migration and Protection Advocacy Forums', uom: '# of events', responsibility: 'Both', annual_target: 6, annual_budget: 400_000 },
+  { id: 'na-1-1-1', strategic_priority_id: 'sp-1', code: '1.1.1', description: 'Distribute NFI Kits to IDP Households', uom: '# of households', responsibility: 'Both' },
+  { id: 'na-1-1-2', strategic_priority_id: 'sp-1', code: '1.1.2', description: 'Update Woreda-Level Emergency Response Plans', uom: '# of MHCP', responsibility: 'Both' },
+  { id: 'na-1-2-1', strategic_priority_id: 'sp-1', code: '1.2.1', description: 'Rehabilitate Boreholes in Project Woredas', uom: '# of water points', responsibility: 'Both' },
+  { id: 'na-1-2-2', strategic_priority_id: 'sp-1', code: '1.2.2', description: 'Provide Emergency Health and First Aid Services', uom: '# of people reached', responsibility: 'Both' },
+  { id: 'na-2-1-1', strategic_priority_id: 'sp-1', code: '2.1.1', description: 'Conduct Community-Based Disaster Risk Reduction (CBDRR) Training', uom: '# of people trained', responsibility: 'Both' },
+  { id: 'na-2-1-2', strategic_priority_id: 'sp-1', code: '2.1.2', description: 'Establish Community-Based Early Warning Systems', uom: '# of systems established', responsibility: 'Both' },
+  { id: 'na-3-1-1', strategic_priority_id: 'sp-1', code: '3.1.1', description: 'Provide Nutrition Support to Vulnerable Groups', uom: '# of beneficiaries', responsibility: 'Both' },
+  { id: 'na-3-2-1', strategic_priority_id: 'sp-1', code: '3.2.1', description: 'Conduct Health and Hygiene Awareness Campaigns', uom: '# of campaigns', responsibility: 'Both' },
+  { id: 'na-4-1-1', strategic_priority_id: 'sp-1', code: '4.1.1', description: 'Recruit and Train Community Volunteers', uom: '# of volunteers trained', responsibility: 'Both' },
+  { id: 'na-5-1-1', strategic_priority_id: 'sp-1', code: '5.1.1', description: 'Organize Migration and Protection Advocacy Forums', uom: '# of events', responsibility: 'Both' },
 ];
 
 export const INITIAL_REGIONS: Region[] = [
