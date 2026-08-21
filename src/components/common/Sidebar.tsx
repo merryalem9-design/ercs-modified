@@ -83,7 +83,7 @@ export const Sidebar: React.FC = () => {
   const visibleNationalActivities = nationalActivities;
 
   const activityChildren = useMemo(() => {
-    const byActivity = new Map
+    const byActivity = new Map<
       string,
       { projects: { id: string; name: string }[]; regions: { id: string; name: string }[] }
     >();
