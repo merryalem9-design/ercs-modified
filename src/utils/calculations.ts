@@ -1,5 +1,5 @@
 // src/utils/calculations.ts
-import { ApprovalStatus, PlanEntry, QuarterlyActual, QuarterlyPlan, UomFactorConfig } from '../types';
+import { PlanEntry, QuarterlyActual, QuarterlyPlan, UomFactorConfig } from '../types';
 
 /** Sum of annual targets across a set of Plan Entries. */
 export const sumTarget = (entries: PlanEntry[]): number =>
@@ -12,8 +12,6 @@ export const sumBudget = (entries: PlanEntry[]): number =>
 /**
  * Sum of quarterly actuals reported against the given Plan Entries.
  * quarterId === 'ALL' (or undefined) sums every quarter reported so far.
- * Pass an already status-filtered `actuals` array (see filterByApprovalStatus)
- * when this needs to reflect only Approved (or only non-Approved) figures.
  */
 export const sumActual = (
   entries: PlanEntry[],
@@ -42,15 +40,12 @@ export const sumExpenditure = (
 
 /**
  * THE "WHAT WAS PLANNED" STEP — quarter-aware.
- * - quarterId 'ALL' / undefined: falls back to the Plan Entries' own annual
- *   annual_target (the Step 1 "Plan" figure — the fixed reference the
- *   Quarterly Plan page reconciles against, never overwritten by it).
+ * - quarterId 'ALL' / undefined: falls back to the Plan Entries' own
+ *   annual_target (the Step 1 "Plan" figure — fixed, never overwritten by
+ *   the quarterly split).
  * - a specific quarter: the sum of that quarter's QuarterlyPlan.target for
  *   these entries (0 for any entry with no Quarterly Plan set for that
- *   quarter yet — callers surface that separately as a "missing plan" notice
- *   rather than letting it silently read as "planned to reach zero").
- * Pass an already status-filtered `quarterlyPlans` array when this needs to
- * reflect only Approved (or only non-Approved) quarters.
+ *   quarter yet).
  */
 export const sumPlannedTarget = (
   entries: PlanEntry[],
@@ -85,44 +80,25 @@ export const budgetUtilizationPct = (spent: number, budget: number): number =>
 
 /**
  * THE CONVERSION STEP.
- * Turns a raw "actual" figure (reported in a UOM, e.g. 150 Persons trained)
- * into a beneficiaries-reached figure using the global conversion factor
- * for that UOM (e.g. x1 for Person, x5 for a Household representing 5 people).
+ * Turns a raw figure (in a UOM, e.g. 150 Persons trained) into a
+ * beneficiaries figure using the fixed global conversion factor for that
+ * UOM (e.g. x1 for "# of people reached", x5 for "# of households"). Pass
+ * a Target for a "planned reach" figure, or an Actual for "reached so far".
  */
 export const convertToBeneficiaries = (
-  actual: number,
+  value: number,
   uom: string,
   uomConfigs: UomFactorConfig[]
 ): number => {
   const config = uomConfigs.find(c => c.uom.toLowerCase() === uom.toLowerCase());
-  return actual * (config ? config.factor : 0);
+  return value * (config ? config.factor : 0);
 };
 
 /**
- * Shared "is this row part of the Approved report, or the Draft one?" test.
- * Reused for Plan Entries, Quarterly Plans and Quarterly Actuals so all
- * three levels of the approval workflow are filtered identically:
- * - 'ALL': everything, regardless of status.
- * - 'Approved': only rows that are themselves Approved.
- * - 'Draft': everything NOT (yet) Approved — Draft, Pending Approval or Rejected.
- */
-export const filterByApprovalStatus = <T extends { approval_status: ApprovalStatus }>(
-  items: T[],
-  reportStatus: 'ALL' | 'Approved' | 'Draft'
-): T[] =>
-  items.filter(item =>
-    reportStatus === 'ALL'
-      ? true
-      : reportStatus === 'Approved'
-        ? item.approval_status === 'Approved'
-        : item.approval_status !== 'Approved'
-  );
-
-/**
- * Achievement status — tracks physical progress (Actual vs Target).
- * Deliberately independent from budget status: an activity can be behind on
- * target while over budget, or ahead of target while under budget. Collapsing
- * the two into a single badge would hide whichever signal lost.
+ * Achievement status — tracks physical progress (Actual vs Target) for a
+ * single Plan Entry or National Activity. Independent from budget status:
+ * an activity can be behind on target while over budget, or ahead of
+ * target while under budget.
  */
 export const getStatusBadge = (achievement: number, hasActuals: boolean) => {
   if (!hasActuals) return { label: 'Planning', color: 'bg-slate-100 text-slate-700 border-slate-300' };
@@ -134,9 +110,10 @@ export const getStatusBadge = (achievement: number, hasActuals: boolean) => {
 };
 
 /**
- * Budget status — tracks financial spend (Spent vs Budget). Kept as its own
- * badge, on purpose, rather than folded into getStatusBadge: physical
- * progress and financial spend are two different axes and can disagree.
+ * Budget status — tracks financial spend (Spent vs Budget) for a single
+ * Plan Entry or National Activity. Kept as its own badge on purpose:
+ * physical progress and financial spend are two different axes and can
+ * disagree.
  */
 export const getBudgetStatusBadge = (utilizationPct: number, hasSpend: boolean) => {
   if (!hasSpend) return { label: 'Planning', color: 'bg-slate-100 text-slate-700 border-slate-300' };

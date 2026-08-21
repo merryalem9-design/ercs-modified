@@ -47,8 +47,9 @@ interface AppContextType {
   quarterlyActuals: QuarterlyActual[];
   upsertQuarterlyActual: (qa: QuarterlyActualInput) => void;
 
+  // Fixed conversion table sourced from the Excel data — no editing UI;
+  // read-only everywhere it's consumed (see convertToBeneficiaries).
   uomConfigs: UomFactorConfig[];
-  updateUomFactor: (uom: string, factor: number) => void;
 
   filters: FilterState; setFilters: React.Dispatch<React.SetStateAction<FilterState>>; resetFilters: () => void;
   getFilteredPlanEntries: () => PlanEntry[];
@@ -87,8 +88,6 @@ const roleOwnsPlanEntry = (role: UserRole, pe: PlanEntry, regions: Region[], pro
 
 const normalizePersistedRole = (raw: UserRole, regions: Region[], projects: Project[]): UserRole => {
   if (raw === 'National Activity AOP') return raw;
-  //if (raw === 'Regional Coordinator') return regions[0] ? `Regional Coordinator — ${regions[0].name}` : 'National Activity AOP';
-  //if (raw === 'Project Coordinator') return projects[0] ? `Project Coordinator — ${projects[0].name}` : 'National Activity AOP';
   if (parseRoleScope(raw, regions, projects).kind !== 'National') return raw;
   return 'National Activity AOP';
 };
@@ -129,7 +128,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [planEntries, setPlanEntries] = useState<PlanEntry[]>(() => readPersisted('planEntries', INITIAL_PLAN_ENTRIES));
   const [quarterlyPlans, setQuarterlyPlans] = useState<QuarterlyPlan[]>(() => readPersisted('quarterlyPlans', INITIAL_QUARTERLY_PLANS));
   const [quarterlyActuals, setQuarterlyActuals] = useState<QuarterlyActual[]>(() => readPersisted('quarterlyActuals', INITIAL_QUARTERLY_ACTUALS));
-  const [uomConfigs, setUomConfigs] = useState<UomFactorConfig[]>(() => readPersisted('uomConfigs', INITIAL_UOM_CONFIGS));
+  // Fixed reference data too — sourced from the Excel UOM table, no setter exposed.
+  const [uomConfigs] = useState<UomFactorConfig[]>(() => readPersisted('uomConfigs', INITIAL_UOM_CONFIGS));
   const [filters, setFilters] = useState<FilterState>(() => ({ ...DEFAULT_FILTERS, ...readPersisted('filters', DEFAULT_FILTERS) }));
 
   useEffect(() => {
@@ -231,15 +231,6 @@ const deletePlanEntry = (id: string) => {
     });
   };
 
-  const updateUomFactor = (uom: string, factor: number) => {
-    setUomConfigs(prev => {
-      const exists = prev.find(c => c.uom.toLowerCase() === uom.toLowerCase());
-      if (exists) return prev.map(c => c.uom.toLowerCase() === uom.toLowerCase() ? { ...c, factor } : c);
-      return [...prev, { uom, factor }];
-    });
-    showToast(`Conversion factor for ${uom} set to x${factor}. All beneficiary totals recompute live.`);
-  };
-
   return (
     <AppContext.Provider value={{
       activeRoute, setActiveRoute, currentRole, setCurrentRole, toastMessage, showToast,
@@ -252,7 +243,7 @@ const deletePlanEntry = (id: string) => {
       planEntries, addPlanEntry, updatePlanEntry, deletePlanEntry,
       quarterlyPlans, upsertQuarterlyPlan,
       quarterlyActuals, upsertQuarterlyActual,
-      uomConfigs, updateUomFactor,
+      uomConfigs,
       filters, setFilters, resetFilters, getFilteredPlanEntries,
     }}>
       {children}

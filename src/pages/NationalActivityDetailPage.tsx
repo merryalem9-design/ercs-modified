@@ -4,13 +4,13 @@ import { useApp } from '../context/AppContext';
 import {
   sumActual,
   sumExpenditure,
-  sumTarget,
-  sumBudget,
+  sumPlannedTarget,
+  sumPlannedBudget,
   achievementPct,
   budgetUtilizationPct,
   convertToBeneficiaries,
 } from '../utils/calculations';
-import { PlanEntry, ScopeType } from '../types';
+import { PlanEntry, QuarterId, ScopeType } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { BudgetStatusBadge } from '../components/common/BudgetStatusBadge';
 import { PlanEntryWizardModal, type PeWizardFormState } from './PlanPage';
@@ -38,12 +38,15 @@ export const NationalActivityDetailPage: React.FC = () => {
     nationalActivities,
     regions,
     projects,
+    quarters,
+    quarterlyPlans,
     quarterlyActuals,
     uomConfigs,
     getFilteredPlanEntries,
   } = useApp();
 
   const [peWizard, setPeWizard] = useState<null | { initial: PeWizardFormState; startStep: 1 | 2 }>(null);
+  const [quarterId, setQuarterId] = useState<'ALL' | QuarterId>('ALL');
 
   const na = selectedNationalActivityId
     ? nationalActivities.find(n => n.id === selectedNationalActivityId)
@@ -62,16 +65,14 @@ export const NationalActivityDetailPage: React.FC = () => {
   const regionalChildren = children.filter(c => c.scope_type === 'Regional');
   const projectChildren = children.filter(c => c.scope_type === 'Project');
 
-  const target = sumTarget(children);
-  const actual = sumActual(children, quarterlyActuals);
+  const target = sumPlannedTarget(children, quarterlyPlans, quarterId);
+  const actual = sumActual(children, quarterlyActuals, quarterId);
   const pct = achievementPct(actual, target);
-  const budget = sumBudget(children);
-  const spent = sumExpenditure(children, quarterlyActuals);
+  const budget = sumPlannedBudget(children, quarterlyPlans, quarterId);
+  const spent = sumExpenditure(children, quarterlyActuals, quarterId);
   const util = budgetUtilizationPct(spent, budget);
-  const beneficiaries = children.reduce(
-    (sum, c) => sum + convertToBeneficiaries(sumActual([c], quarterlyActuals), na.uom, uomConfigs),
-    0
-  );
+  const beneficiaries = convertToBeneficiaries(actual, na.uom, uomConfigs);
+  const factor = uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0;
 
   // National Activity AOP has no assigned Region/Project of their own, so
   // they neither create Plan Entries in isolation from a Region/Project
@@ -169,7 +170,7 @@ export const NationalActivityDetailPage: React.FC = () => {
             </div>
             <h2 className="text-lg font-black text-slate-800 mt-1">{na.description}</h2>
             <p className="text-[11px] text-slate-500 mt-1">
-              Target and Budget below are aggregated live from every linked Plan Entry — there's no separate national ceiling to set or reconcile.
+              Target and Budget below are aggregated live from every linked Plan Entry — there's no separate national ceiling to set or reconcile. Switch quarters to see that quarter's figures instead of the annual plan.
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -191,11 +192,32 @@ export const NationalActivityDetailPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-          <StatCard icon={Target} label="Aggregated Target" value={`${target.toLocaleString()} ${na.uom}`} sub={`${actual.toLocaleString()} achieved so far`} />
+        <div className="mt-4 bg-white p-1.5 rounded-lg border inline-flex gap-1">
+          <button onClick={() => setQuarterId('ALL')} className={`px-3 py-1 rounded text-[10px] font-bold ${quarterId === 'ALL' ? 'bg-ercs-red text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+            Annual
+          </button>
+          {quarters.map(qtr => (
+            <button key={qtr.id} onClick={() => setQuarterId(qtr.id)} className={`px-3 py-1 rounded text-[10px] font-bold ${quarterId === qtr.id ? 'bg-ercs-red text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              {qtr.id}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+          <StatCard icon={Target} label={quarterId === 'ALL' ? 'Aggregated Target' : `${quarterId} Target`} value={`${target.toLocaleString()} ${na.uom}`} sub={`${actual.toLocaleString()} achieved so far`} />
           <StatCard icon={Layers} label="Achievement" value={`${pct.toFixed(1)}%`} sub={<StatusBadge achievementPct={pct} hasActuals={actual > 0} />} />
-          <StatCard icon={Wallet} label="Aggregated Budget" value={`ETB ${budget.toLocaleString()}`} sub={`ETB ${spent.toLocaleString()} spent`} />
-          <StatCard icon={Users} label="Beneficiaries Reached" value={beneficiaries.toLocaleString()} sub={<BudgetStatusBadge utilizationPct={util} hasSpend={spent > 0} />} />
+          <StatCard
+            icon={Wallet}
+            label={quarterId === 'ALL' ? 'Aggregated Budget' : `${quarterId} Budget`}
+            value={`ETB ${budget.toLocaleString()}`}
+            sub={
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span>ETB {spent.toLocaleString()} spent</span>
+                <BudgetStatusBadge utilizationPct={util} hasSpend={spent > 0} />
+              </div>
+            }
+          />
+          <StatCard icon={Users} label="Beneficiaries Reached" value={beneficiaries.toLocaleString()} sub={<span className="text-slate-400">{na.uom} × {factor} conversion</span>} />
         </div>
       </div>
 
@@ -220,12 +242,13 @@ export const NationalActivityDetailPage: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b">
                 <tr>
-                  <th className="p-3">Activity Code</th>
                   <th className="p-3">Executed By</th>
                   <th className="p-3 text-right">Target</th>
                   <th className="p-3 text-right">Actual</th>
                   <th className="p-3 text-right">Budget</th>
                   <th className="p-3 text-right">Spent</th>
+                  <th className="p-3 text-right">Beneficiaries</th>
+                  <th className="p-3 text-right">% Utilization</th>
                   <th className="p-3 text-center">Status</th>
                   <th className="p-3 text-center">Actions</th>
                 </tr>
@@ -233,20 +256,28 @@ export const NationalActivityDetailPage: React.FC = () => {
               <tbody className="divide-y">
                 {children.map(pe => {
                   const scopeName = pe.scope_type === 'Regional' ? regions.find(r => r.id === pe.region_id)?.name : projects.find(p => p.id === pe.project_id)?.name;
-                  const peActual = sumActual([pe], quarterlyActuals);
-                  const peSpent = sumExpenditure([pe], quarterlyActuals);
-                  const peAchievement = achievementPct(peActual, pe.annual_target);
+                  const peTarget = sumPlannedTarget([pe], quarterlyPlans, quarterId);
+                  const peBudget = sumPlannedBudget([pe], quarterlyPlans, quarterId);
+                  const peActual = sumActual([pe], quarterlyActuals, quarterId);
+                  const peSpent = sumExpenditure([pe], quarterlyActuals, quarterId);
+                  const peAchievement = achievementPct(peActual, peTarget);
+                  const peUtil = budgetUtilizationPct(peSpent, peBudget);
+                  const peBeneficiaries = convertToBeneficiaries(peActual, na.uom, uomConfigs);
                   return (
                     <tr key={pe.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-bold text-ercs-red">{pe.activity_code}</td>
                       <td className="p-3">
                         {pe.scope_type === 'Regional' ? <MapPin className="w-3 h-3 inline text-blue-400 mr-1" /> : <FolderGit2 className="w-3 h-3 inline text-purple-400 mr-1" />}
                         <span className="font-semibold">{scopeName || '—'}</span>
                       </td>
-                      <td className="p-3 text-right font-bold">{pe.annual_target.toLocaleString()} {na.uom}</td>
-                      <td className="p-3 text-right">{peActual.toLocaleString()} {na.uom}</td>
-                      <td className="p-3 text-right">ETB {pe.annual_budget.toLocaleString()}</td>
-                      <td className="p-3 text-right">ETB {peSpent.toLocaleString()}</td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{peTarget.toLocaleString()} {na.uom}</td>
+                      <td className="p-3 text-right whitespace-nowrap">{peActual.toLocaleString()} {na.uom}</td>
+                      <td className="p-3 text-right whitespace-nowrap">ETB {peBudget.toLocaleString()}</td>
+                      <td className="p-3 text-right whitespace-nowrap">ETB {peSpent.toLocaleString()}</td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div>{peBeneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">×{uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0}</div>
+                      </td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{peUtil.toFixed(1)}%</td>
                       <td className="p-3 text-center"><StatusBadge achievementPct={peAchievement} hasActuals={peActual > 0} /></td>
                       <td className="p-3 text-center">
                         <button onClick={() => openChild(pe)} className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-bold flex items-center gap-1 mx-auto">

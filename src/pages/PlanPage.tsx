@@ -2,8 +2,18 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { FilterBar } from '../components/common/FilterBar';
-import { sumTarget, sumBudget } from '../utils/calculations';
-import { buildActivityCode } from '../utils/activityCode';
+import { StatusBadge } from '../components/common/StatusBadge';
+import {
+  sumTarget,
+  sumBudget,
+  sumPlannedTarget,
+  sumPlannedBudget,
+  sumActual,
+  sumExpenditure,
+  achievementPct,
+  budgetUtilizationPct,
+  convertToBeneficiaries,
+} from '../utils/calculations';
 import { PlanEntry, ScopeType, Project } from '../types';
 import { ArrowUpRight, ChevronRight, Layers, Plus, Save, Trash2, X } from 'lucide-react';
 
@@ -24,17 +34,10 @@ interface PeWizardFormState {
   lockScope?: boolean;
 }
 
-const LOCKED_UOMS = new Set(['Person', 'House Hold (HH)']);
-
-const clampFactor = (raw: string): number => {
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-};
-
 export const PlanPage: React.FC = () => {
   const {
-    nationalActivities, regions, projects, planEntries, deletePlanEntry,
-    uomConfigs, updateUomFactor, filters, getFilteredPlanEntries,
+    nationalActivities, regions, projects, deletePlanEntry,
+    uomConfigs, quarterlyPlans, quarterlyActuals, filters, getFilteredPlanEntries,
     setSelectedNationalActivityId, setActiveRoute, currentRole,
   } = useApp();
 
@@ -42,22 +45,23 @@ export const PlanPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<null | { id: string; label: string }>(null);
 
   const filteredEntries = getFilteredPlanEntries();
+  const q = filters.quarterId;
+  const isQuarterScoped = q !== 'ALL';
 
-  const visibleNationalActivities = nationalActivities.filter(na => {
-    if (filters.nationalActivityId !== 'ALL' && na.id !== filters.nationalActivityId) return false;
-    return true;
-  });
+  const isCoordinator = currentRole !== 'National Activity AOP';
+  const hasRegionOrProjectFilter = filters.regionId !== 'ALL' || filters.projectId !== 'ALL';
+  // Regional/Project coordinators are already scoped to their own entries by
+  // role, so they always see the flat execution-entries view. The AOP sees
+  // the rolled-up National-Aggregated view unless they've drilled into a
+  // specific Region/Project via the filters.
+  const showAggregatedView = !isCoordinator && !hasRegionOrProjectFilter;
+
+  const canAddPlanEntry = isCoordinator || hasRegionOrProjectFilter;
 
   const viewLinkMap = (naId: string) => {
     setSelectedNationalActivityId(naId);
     setActiveRoute('national-detail');
   };
-
-  // The National Activity AOP has no assigned Region/Project of their own,
-  // so "Add Plan Entry" only opens for them once they've filtered down to a
-  // specific Region or Project — otherwise they'd have no way to enter data
-  // at all now that National Activities can't be added/edited.
-  const canAddPlanEntry = currentRole !== 'National Activity AOP' || filters.regionId !== 'ALL' || filters.projectId !== 'ALL';
 
   const openAddPlanWizard = () => {
     const naFilterActive = filters.nationalActivityId !== 'ALL';
@@ -118,15 +122,60 @@ export const PlanPage: React.FC = () => {
     });
   };
 
+  // ---------------------------------------------------------------------
+  // National-Aggregated rows — one per National Activity, bottom-up summed
+  // from the Plan Entries in scope (never a stored NA-level figure).
+  // ---------------------------------------------------------------------
+  const naInScope = nationalActivities.filter(na =>
+    filters.nationalActivityId === 'ALL' || na.id === filters.nationalActivityId
+  );
+
+  const aggregatedRows = naInScope.map(na => {
+    const naEntries = filteredEntries.filter(pe => pe.national_activity_id === na.id);
+    const target = sumPlannedTarget(naEntries, quarterlyPlans, q);
+    const budget = sumPlannedBudget(naEntries, quarterlyPlans, q);
+    const spent = sumExpenditure(naEntries, quarterlyActuals, q);
+    const utilization = budgetUtilizationPct(spent, budget);
+    const factor = uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0;
+    const beneficiaries = convertToBeneficiaries(target, na.uom, uomConfigs);
+    return { na, entryCount: naEntries.length, target, budget, spent, utilization, beneficiaries, factor };
+  });
+
+  const aggregatedTotalBudget = aggregatedRows.reduce((s, r) => s + r.budget, 0);
+  const aggregatedTotalSpent = aggregatedRows.reduce((s, r) => s + r.spent, 0);
+  const aggregatedTotalBeneficiaries = aggregatedRows.reduce((s, r) => s + r.beneficiaries, 0);
+  const aggregatedTotalUtilization = budgetUtilizationPct(aggregatedTotalSpent, aggregatedTotalBudget);
+
+  // ---------------------------------------------------------------------
+  // Execution-entries rows — one per Plan Entry.
+  // ---------------------------------------------------------------------
+  const executionRows = filteredEntries.map(pe => {
+    const na = nationalActivities.find(n => n.id === pe.national_activity_id);
+    const target = sumPlannedTarget([pe], quarterlyPlans, q);
+    const budget = sumPlannedBudget([pe], quarterlyPlans, q);
+    const actual = sumActual([pe], quarterlyActuals, q);
+    const spent = sumExpenditure([pe], quarterlyActuals, q);
+    const achievement = achievementPct(actual, target);
+    const utilization = budgetUtilizationPct(spent, budget);
+    const factor = na ? (uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0) : 0;
+    const beneficiaries = convertToBeneficiaries(target, na?.uom || '', uomConfigs);
+    const scopeName = pe.scope_type === 'Regional' ? regions.find(r => r.id === pe.region_id)?.name : projects.find(p => p.id === pe.project_id)?.name;
+    return { pe, na, target, budget, actual, spent, achievement, utilization, beneficiaries, factor, scopeName };
+  });
+
+  const executionTotalBudget = executionRows.reduce((s, r) => s + r.budget, 0);
+  const executionTotalSpent = executionRows.reduce((s, r) => s + r.spent, 0);
+  const executionTotalBeneficiaries = executionRows.reduce((s, r) => s + r.beneficiaries, 0);
+  const executionTotalUtilization = budgetUtilizationPct(executionTotalSpent, executionTotalBudget);
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-black text-slate-800">Step 1 — Annual Plan Data Entry</h2>
         <p className="text-xs text-slate-500 mt-1">
-          Each National Activity below is fixed, Excel-sourced reference data — its Target and Budget are always the
-          live sum of the Plan Entries linked to it, nothing to set and nothing to reconcile. Link a Region or
-          Project to a National Activity to add its contribution, then head to the Quarterly Plan page to split
-          that entry's annual figures into Q1–Q4 before reporting actuals.
+          {showAggregatedView
+            ? "Every National Activity is fixed, Excel-sourced reference data — its Target, Budget and Beneficiaries below are always the live sum of the Plan Entries linked to it, bottom-up, nothing to set and nothing to reconcile. Filter to a Region or Project to see (and add) the execution entries behind these numbers."
+            : "Each row below is a Plan Entry — a Region or Project's contribution to a National Activity. Its Target and Budget roll up live into that National Activity's totals. Use the Quarter filter to switch these figures between the full annual plan and a single quarter's Quarterly Plan / Quarterly Actual."}
         </p>
       </div>
 
@@ -135,107 +184,142 @@ export const PlanPage: React.FC = () => {
       <section className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
-            <Layers className="w-4 h-4 text-ercs-red" /> National Activities ({visibleNationalActivities.length})
+            <Layers className="w-4 h-4 text-ercs-red" />
+            <span>{showAggregatedView ? `National Activities (${aggregatedRows.length})` : `Execution Plan Entries (${executionRows.length})`}</span>
+            {isQuarterScoped && <span className="normal-case font-semibold text-slate-400">— {q} figures</span>}
           </div>
-          <span className="text-[10px] text-slate-400 font-semibold">Fixed reference list — Target/Budget aggregate live from linked Plan Entries.</span>
-        </div>
-        <div className="divide-y">
-          {visibleNationalActivities.map(na => {
-            const allChildren = planEntries.filter(pe => pe.national_activity_id === na.id);
-            const children = filteredEntries.filter(pe => pe.national_activity_id === na.id);
-            const aggregatedTarget = sumTarget(allChildren);
-            const aggregatedBudget = sumBudget(allChildren);
-            return (
-              <div key={na.id} className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="bg-ercs-red text-white text-[10px] font-extrabold px-2 py-0.5 rounded">{na.code}</span>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase">{na.uom}</span>
-                      {na.responsibility && (
-                        <span className="bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded border border-slate-200">{na.responsibility}</span>
-                      )}
-                    </div>
-                    <div className="text-sm font-bold text-slate-800 mt-1">{na.description}</div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Aggregated Target: <b>{aggregatedTarget.toLocaleString()} {na.uom}</b> · Aggregated Budget: <b>ETB {aggregatedBudget.toLocaleString()}</b>
-                      <span className="text-slate-400"> — computed live from {allChildren.length} linked plan {allChildren.length === 1 ? 'entry' : 'entries'}.</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => viewLinkMap(na.id)} className="px-2.5 py-1.5 rounded bg-red-50 text-ercs-red font-bold text-xs flex items-center gap-1">
-                      View Link Map <ArrowUpRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold">
-                  <button onClick={() => viewLinkMap(na.id)} className="bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                    {children.length} linked plan entries in current filter <ArrowUpRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {visibleNationalActivities.length === 0 && <div className="p-6 text-center text-xs text-slate-500">No National Activities match this filter.</div>}
-        </div>
-      </section>
-
-      <section className="bg-white p-5 rounded-xl border shadow-sm space-y-3">
-        <div className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b pb-3">Conversion Factors (UoM → Beneficiaries)</div>
-        <p className="text-[11px] text-slate-500 -mt-1">This is the multiplier the Report page uses to turn a reported Actual into Beneficiaries Reached. Person and House Hold (HH) are fixed; every other UoM used by a National Activity can be fine-tuned here.</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {uomConfigs.map(cfg => (
-            <UomFactorCard key={cfg.uom} uom={cfg.uom} factor={cfg.factor} />
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="p-4 border-b flex items-center justify-between bg-slate-50">
-          <div className="text-xs font-bold text-slate-800 uppercase tracking-wider">Execution Plan Entries ({filteredEntries.length})</div>
           {canAddPlanEntry && (
             <button onClick={openAddPlanWizard} className="flex items-center gap-1.5 bg-ercs-red text-white px-3 py-1.5 rounded-lg text-xs font-bold">
               <Plus className="w-3.5 h-3.5" /> Add Plan Entry
             </button>
           )}
         </div>
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b"><tr><th className="p-3">Activity Code</th><th className="p-3">Activity Description</th><th className="p-3">Executed By</th><th className="p-3 text-right">Annual Target</th><th className="p-3 text-right">Annual Budget</th><th className="p-3 text-center">Status</th><th className="p-3 text-center">Actions</th></tr></thead>
-          <tbody className="divide-y">
-            {filteredEntries.map(pe => {
-              const na = nationalActivities.find(n => n.id === pe.national_activity_id);
-              const scopeName = pe.scope_type === 'Regional' ? regions.find(r => r.id === pe.region_id)?.name : projects.find(p => p.id === pe.project_id)?.name;
 
-              return (
-                <tr key={pe.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-bold text-ercs-red">{pe.activity_code}</td>
-                  <td className="p-3 min-w-56">
-                    <div className="font-bold text-slate-800">{pe.activity_name}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">{pe.activity_description}</div>
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pe.scope_type === 'Regional' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{pe.scope_type}</span>
-                    <span className="ml-2 font-semibold">{scopeName || '—'}</span>
-                  </td>
-                  <td className="p-3 text-right font-bold">{pe.annual_target.toLocaleString()} {na?.uom}</td>
-                  <td className="p-3 text-right">{pe.annual_budget.toLocaleString()}</td>
-                  <td className="p-3 text-center"><span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">Approved</span></td>
-                  <td className="p-3">
-  <div className="flex items-center justify-center gap-2 flex-wrap">
-    {currentRole !== 'National Activity AOP' && (
-      <>
-        <button onClick={() => openEditPlanWizard(pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>
-        <button onClick={() => setDeleteTarget({ id: pe.id, label: `${pe.activity_code} / ${scopeName}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>
-      </>
-    )}
-  </div>
-</td>
-                </tr>
-              );
-            })}
-            {filteredEntries.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">No plan entries match this filter.</td></tr>}
-          </tbody>
-        </table>
+        {showAggregatedView ? (
+          aggregatedRows.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">No National Activities match this filter.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b">
+                  <tr>
+                    <th className="p-3">Code</th>
+                    <th className="p-3">Activity</th>
+                    <th className="p-3">UOM</th>
+                    <th className="p-3 text-right">Target</th>
+                    <th className="p-3 text-right">Budget (ETB)</th>
+                    <th className="p-3 text-right">Beneficiaries</th>
+                    <th className="p-3 text-right">% Utilization</th>
+                    <th className="p-3 text-center">Open</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {aggregatedRows.map(row => (
+                    <tr key={row.na.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{row.na.code}</td>
+                      <td className="p-3 min-w-56">
+                        <div className="font-bold text-slate-800">{row.na.description}</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">{row.entryCount} linked plan {row.entryCount === 1 ? 'entry' : 'entries'} · {row.na.responsibility}</div>
+                      </td>
+                      <td className="p-3 whitespace-nowrap text-slate-500 font-semibold">{row.na.uom}</td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{row.target.toLocaleString()}</td>
+                      <td className="p-3 text-right whitespace-nowrap">{row.budget.toLocaleString()}</td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="font-bold">{row.beneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Target × {row.factor}</div>
+                      </td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{row.utilization.toFixed(1)}%</td>
+                      <td className="p-3 text-center">
+                        <button onClick={() => viewLinkMap(row.na.id)} className="text-[10px] font-bold text-ercs-red inline-flex items-center gap-0.5">
+                          View <ArrowUpRight className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 font-black border-t-2 border-slate-200">
+                    <td className="p-3" colSpan={3}>TOTAL</td>
+                    <td className="p-3 text-right text-slate-300" title="Targets use different units across activities and are not summable">—</td>
+                    <td className="p-3 text-right">{aggregatedTotalBudget.toLocaleString()}</td>
+                    <td className="p-3 text-right">{aggregatedTotalBeneficiaries.toLocaleString()}</td>
+                    <td className="p-3 text-right">{aggregatedTotalUtilization.toFixed(1)}%</td>
+                    <td className="p-3"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        ) : (
+          executionRows.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-xs text-slate-500 mb-3">No Plan Entries are linked yet for this selection.</p>
+              {canAddPlanEntry && (
+                <button onClick={openAddPlanWizard} className="inline-flex items-center gap-1.5 bg-ercs-red text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+                  <Plus className="w-3.5 h-3.5" /> Add Plan Entry
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold uppercase border-b">
+                  <tr>
+                    <th className="p-3">Code</th>
+                    <th className="p-3">Activity Name</th>
+                    <th className="p-3">Description</th>
+                    <th className="p-3">Executed By</th>
+                    <th className="p-3 text-right">Target</th>
+                    <th className="p-3 text-right">Budget (ETB)</th>
+                    <th className="p-3 text-right">Beneficiaries</th>
+                    <th className="p-3 text-right">% Utilization</th>
+                    <th className="p-3 text-center">Status</th>
+                    {isCoordinator && <th className="p-3 text-center">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {executionRows.map(row => (
+                    <tr key={row.pe.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-ercs-red whitespace-nowrap">{row.na?.code}</td>
+                      <td className="p-3 min-w-40 font-bold text-slate-800">{row.pe.activity_name}</td>
+                      <td className="p-3 min-w-56 text-slate-500">{row.pe.activity_description}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.pe.scope_type === 'Regional' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{row.pe.scope_type}</span>
+                        <span className="ml-2 font-semibold">{row.scopeName || '—'}</span>
+                      </td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{row.target.toLocaleString()} {row.na?.uom}</td>
+                      <td className="p-3 text-right whitespace-nowrap">{row.budget.toLocaleString()}</td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="font-bold">{row.beneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Target × {row.factor}</div>
+                      </td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{row.utilization.toFixed(1)}%</td>
+                      <td className="p-3 text-center"><StatusBadge achievementPct={row.achievement} hasActuals={row.actual > 0} /></td>
+                      {isCoordinator && (
+                        <td className="p-3">
+                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                            <button onClick={() => openEditPlanWizard(row.pe)} className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-bold">Edit</button>
+                            <button onClick={() => setDeleteTarget({ id: row.pe.id, label: `${row.na?.code || ''} / ${row.scopeName || ''}` })} className="px-2.5 py-1 rounded bg-red-50 text-red-700 font-bold"><Trash2 className="w-3 h-3" /></button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 font-black border-t-2 border-slate-200">
+                    <td className="p-3" colSpan={4}>TOTAL</td>
+                    <td className="p-3 text-right text-slate-300" title="Targets use different units across activities and are not summable">—</td>
+                    <td className="p-3 text-right">{executionTotalBudget.toLocaleString()}</td>
+                    <td className="p-3 text-right">{executionTotalBeneficiaries.toLocaleString()}</td>
+                    <td className="p-3 text-right">{executionTotalUtilization.toFixed(1)}%</td>
+                    <td className="p-3" colSpan={isCoordinator ? 2 : 1}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        )}
       </section>
 
       {peWizard && (
@@ -317,7 +401,10 @@ export const PlanEntryWizardModal: React.FC<{
     numbersValid &&
     !isDuplicateLink;
 
-  const generatedActivityCode = buildActivityCode(selectedNa, effectiveScope, form.region_id, form.project_id, regions, projects);
+  // The Plan Entry's activity code is always just its parent National
+  // Activity's own code — the "Executed By" column already makes clear
+  // who's running it, so there's no per-Region/Project suffix any more.
+  const activityCode = selectedNa?.code || '';
 
   React.useEffect(() => {
     if (form.activity_name.trim()) return;
@@ -346,7 +433,7 @@ export const PlanEntryWizardModal: React.FC<{
       project_id: effectiveScope === 'Project' ? form.project_id : undefined,
       annual_target: thisTarget,
       annual_budget: thisBudget,
-      activity_code: buildActivityCode(selectedNa, effectiveScope, form.region_id, form.project_id, regions, projects),
+      activity_code: selectedNa?.code || '',
       activity_name: form.activity_name.trim(),
       activity_description: form.activity_description.trim(),
       approval_status: 'Approved',
@@ -464,9 +551,9 @@ export const PlanEntryWizardModal: React.FC<{
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 bg-slate-50 border rounded-lg p-3">
-              <div className="text-[10px] uppercase font-extrabold text-slate-400">Auto-generated Activity Code</div>
-              <div className="text-sm font-black text-ercs-red mt-1">{generatedActivityCode || 'Select the execution scope first'}</div>
-              <div className="text-[10px] text-slate-400 mt-1">Generated from the parent National Activity and the selected Region/Project.</div>
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">Activity Code</div>
+              <div className="text-sm font-black text-ercs-red mt-1">{activityCode || '—'}</div>
+              <div className="text-[10px] text-slate-400 mt-1">Always the parent National Activity's own code — the "Executed By" column already shows who's running it.</div>
             </div>
             <LabeledInput label="Activity Name" value={form.activity_name} onChange={v => setForm(f => ({ ...f, activity_name: v }))} placeholder="e.g. HNS, EAP, Amhara" />
             <div className="col-span-2">
@@ -544,49 +631,6 @@ const LabeledInput: React.FC<{ label: string; value: string; onChange: (v: strin
     <input type={type} min={type === 'number' ? 0 : undefined} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)} className="w-full text-xs border border-slate-200 rounded p-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-100" />
   </label>
 );
-
-const UomFactorCard: React.FC<{ uom: string; factor: number }> = ({ uom, factor }) => {
-  const { updateUomFactor } = useApp();
-  const locked = LOCKED_UOMS.has(uom);
-  const [draft, setDraft] = useState(String(factor));
-
-  React.useEffect(() => { setDraft(String(factor)); }, [factor]);
-
-  if (locked) {
-    return (
-      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
-        <div><div className="text-xs font-bold text-slate-800">{uom}</div><div className="text-[10px] text-slate-500">Beneficiaries per unit</div></div>
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-bold text-slate-400">×</span>
-          <span className="w-14 text-center text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded p-1.5">{factor}</span>
-        </div>
-      </div>
-    );
-  }
-
-  const commit = (raw: string) => {
-    const v = clampFactor(raw);
-    setDraft(String(v));
-    updateUomFactor(uom, v);
-  };
-
-  return (
-    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
-      <div><div className="text-xs font-bold text-slate-800">{uom}</div><div className="text-[10px] text-slate-500">Beneficiaries per unit</div></div>
-      <div className="flex items-center gap-1">
-        <span className="text-xs font-bold text-slate-400">×</span>
-        <input
-          type="number"
-          min="0"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={e => commit(e.target.value)}
-          className="w-14 text-center text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded p-1.5 focus:outline-none focus:ring-2 focus:ring-red-100"
-        />
-      </div>
-    </div>
-  );
-};
 
 const ModalShell: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
   <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4">
