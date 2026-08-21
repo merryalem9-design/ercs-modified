@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { FilterBar } from '../components/common/FilterBar';
 import { achievementPct, budgetUtilizationPct, convertToBeneficiaries, sumActual } from '../utils/calculations';
 import { PlanEntry, QuarterId } from '../types';
-import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 
 export const QuarterlyEntryPage: React.FC = () => {
   const { nationalActivities, regions, projects, quarters, getFilteredPlanEntries } = useApp();

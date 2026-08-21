@@ -140,9 +140,6 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
                 className="w-20 text-center text-[10px] font-bold border border-slate-200 rounded p-1"
               />
             </div>
-            <div className="mt-1 flex flex-col items-center gap-1">
-              <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600">✅ Approved</span>
-            </div>
           </td>
         );
       })}
