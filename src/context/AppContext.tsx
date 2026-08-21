@@ -7,8 +7,6 @@ import {
   INITIAL_STRATEGIC_PRIORITIES, INITIAL_NATIONAL_ACTIVITIES, INITIAL_REGIONS, INITIAL_ZONES, INITIAL_PROJECTS, INITIAL_PLAN_ENTRIES,
   FISCAL_QUARTERS, INITIAL_QUARTERLY_PLANS, INITIAL_QUARTERLY_ACTUALS, INITIAL_UOM_CONFIGS,
 } from '../data/seedData';
-import { sumTarget, sumBudget } from '../utils/calculations';
-import { buildActivityCode } from '../utils/activityCode';
 
 // No approval workflow; all entries are automatically Approved.
 type QuarterlyPlanInput = Omit<QuarterlyPlan, 'approval_status' | 'submitted_at' | 'reviewed_at' | 'rejection_reason'>;
@@ -23,10 +21,10 @@ interface AppContextType {
 
   strategicPriorities: StrategicPriority[];
 
+  // Fixed, Excel-sourced reference data — no add/edit/delete. Each one's
+  // Target/Budget is computed live from its linked Plan Entries wherever
+  // it's displayed (see sumTarget/sumBudget in utils/calculations).
   nationalActivities: NationalActivity[];
-  addNationalActivity: (na: NationalActivity) => void;
-  updateNationalActivity: (na: NationalActivity) => void;
-  deleteNationalActivity: (id: string) => void;
 
   regions: Region[];
   addRegion: (r: Region) => void;
@@ -95,7 +93,11 @@ const normalizePersistedRole = (raw: UserRole, regions: Region[], projects: Proj
   return 'National Activity AOP';
 };
 
-const PERSISTENCE_KEY = 'ercs-aop-final-role-filtered-v2';
+// Bumped to v3: National Activity no longer stores annual_target/annual_budget
+// and can no longer be added/edited/deleted, so any stale v2 localStorage
+// (which may contain user-created National Activities or edited ceilings)
+// should not be carried forward over the fixed Excel-backed reference data.
+const PERSISTENCE_KEY = 'ercs-aop-bottom-up-v3';
 
 const readPersisted = <T,>(key: string, fallback: T): T => {
   if (typeof window === 'undefined') return fallback;
@@ -118,7 +120,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedNationalActivityId, setSelectedNationalActivityId] = useState<string | null>(() => readPersisted('selectedNationalActivityId', null));
 
   const [strategicPriorities] = useState<StrategicPriority[]>(INITIAL_STRATEGIC_PRIORITIES);
-  const [nationalActivities, setNationalActivities] = useState<NationalActivity[]>(() => readPersisted('nationalActivities', INITIAL_NATIONAL_ACTIVITIES));
+  // Fixed reference data — no setter exposed; nothing in the UI can change it.
+  const [nationalActivities] = useState<NationalActivity[]>(INITIAL_NATIONAL_ACTIVITIES);
   const [regions, setRegions] = useState<Region[]>(() => readPersisted('regions', INITIAL_REGIONS));
   const [zones, setZones] = useState<Zone[]>(() => readPersisted('zones', INITIAL_ZONES));
   const [projects, setProjects] = useState<Project[]>(() => readPersisted('projects', INITIAL_PROJECTS));
@@ -133,12 +136,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(PERSISTENCE_KEY, JSON.stringify({
-        activeRoute, currentRole, selectedNationalActivityId, nationalActivities, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters,
+        activeRoute, currentRole, selectedNationalActivityId, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters,
       }));
     } catch {
       // localStorage may be unavailable; in-memory state still works for the session.
     }
-  }, [activeRoute, currentRole, selectedNationalActivityId, nationalActivities, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters]);
+  }, [activeRoute, currentRole, selectedNationalActivityId, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters]);
 
   const showToast = (msg: string) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 3000); };
   const resetFilters = () => setFilters(DEFAULT_FILTERS);
@@ -155,89 +158,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   });
 
-  const addNationalActivity = (na: NationalActivity) => {
-    if (currentRole !== 'National Activity AOP') { showToast('Only the National Activity AOP can create National Activities.'); return; }
-    setNationalActivities(prev => [...prev, na]);
-    showToast(`National Activity ${na.code} created.`);
-  };
-  const updateNationalActivity = (na: NationalActivity) => {
-    if (currentRole !== 'National Activity AOP') { showToast('Only the National Activity AOP can edit National Activities.'); return; }
-    setNationalActivities(prev => prev.map(x => x.id === na.id ? na : x));
-    showToast(`National Activity ${na.code} updated.`);
-  };
-
-  const deleteNationalActivity = (id: string) => {
-    if (currentRole !== 'National Activity AOP') { showToast('Only the National Activity AOP can delete National Activities.'); return; }
-    const childIds = planEntries.filter(pe => pe.national_activity_id === id).map(pe => pe.id);
-    setPlanEntries(prev => prev.filter(pe => pe.national_activity_id !== id));
-    setQuarterlyPlans(prev => prev.filter(qp => !childIds.includes(qp.plan_entry_id)));
-    setQuarterlyActuals(prev => prev.filter(a => !childIds.includes(a.plan_entry_id)));
-    setNationalActivities(prev => prev.filter(x => x.id !== id));
-    setSelectedNationalActivityId(prev => (prev === id ? null : prev));
-    setFilters(prev => (prev.nationalActivityId === id ? { ...prev, nationalActivityId: 'ALL' } : prev));
-    showToast('National Activity and its linked plan, quarterly plan and actual records deleted.');
-  };
-
   const addRegion = (r: Region) => { setRegions(prev => [...prev, r]); showToast(`Region ${r.name} added.`); };
   const addZone = (z: Zone) => { setZones(prev => [...prev, z]); showToast(`Zone ${z.name} added.`); };
   const addProject = (p: Project) => { setProjects(prev => [...prev, p]); showToast(`Project ${p.name} added.`); };
 
   // ---------------------------------------------------------------------
-  // National Activity ceilings are fixed parent limits. Plan Entries roll
-  // up into Reports/Details, but they MUST NOT increase the parent's
-  // annual_target / annual_budget ceiling.
+  // PLAN ENTRY — a National Activity's Target/Budget is always the live sum
+  // of its linked Plan Entries, so there is no ceiling to validate against
+  // here any more: any non-negative target/budget is acceptable.
+  // National Activity AOP can now also create Plan Entries directly (this
+  // is their only way to enter data now that National Activities are fixed
+  // reference rows with no "Add" flow) — roleOwnsPlanEntry already allows
+  // the National scope to own any Plan Entry.
   // ---------------------------------------------------------------------
-  const getNationalActivityUsage = (nationalActivityId: string, entries: PlanEntry[]) => {
-    const children = entries.filter(pe => pe.national_activity_id === nationalActivityId);
-    return {
-      target: sumTarget(children),
-      budget: sumBudget(children),
-    };
-  };
-
-  const getNationalActivityValidation = (nationalActivityId: string, entries: PlanEntry[]) => {
-    const na = nationalActivities.find(n => n.id === nationalActivityId);
-    if (!na) {
-      return { ok: false, reason: 'The selected National Activity no longer exists.' };
-    }
-
-    const usage = getNationalActivityUsage(nationalActivityId, entries);
-    const targetExceeded = usage.target > na.annual_target;
-    const budgetExceeded = usage.budget > na.annual_budget;
-
-    if (targetExceeded || budgetExceeded) {
-      const reasons: string[] = [];
-      if (targetExceeded) {
-        reasons.push(
-          `annual target ${usage.target.toLocaleString()} exceeds the National Activity target limit of ${na.annual_target.toLocaleString()} ${na.uom}`
-        );
-      }
-      if (budgetExceeded) {
-        reasons.push(
-          `annual budget ETB ${usage.budget.toLocaleString()} exceeds the National Activity budget limit of ETB ${na.annual_budget.toLocaleString()}`
-        );
-      }
-      return { ok: false, reason: reasons.join(' and ') + '.' };
-    }
-
-    return { ok: true, reason: '' };
-  };
-
   const addPlanEntry = (pe: PlanEntry) => {
-    if (parseRoleScope(currentRole, regions, projects).kind === 'National') { showToast('National Activity AOP creates National Activities; Coordinators create execution entries.'); return; }
     if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only manage entries for their assigned project or region.'); return; }
 
-    const next = [...planEntries, pe];
-    const validation = getNationalActivityValidation(pe.national_activity_id, next);
-    if (!validation.ok) {
-      showToast(`Plan entry not saved: ${validation.reason}`);
-      return;
-    }
-
-    setPlanEntries(next);
+    setPlanEntries(prev => [...prev, pe]);
     const na = nationalActivities.find(n => n.id === pe.national_activity_id);
     showToast(na
-      ? `Plan entry added and linked to ${na.code}. National Activity Target/Budget ceilings remain unchanged.`
+      ? `Plan entry added and linked to ${na.code}. ${na.code}'s aggregated Target/Budget updates automatically.`
       : 'Plan entry added.');
   };
 
@@ -246,25 +186,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only edit entries for their assigned project or region.'); return; }
     const old = planEntries.find(x => x.id === pe.id);
     if (old?.approval_status === 'Approved') { showToast('This plan entry is already approved and locked. It can no longer be edited.'); return; }
-    const next = planEntries.map(x => (x.id === pe.id ? pe : x));
 
-    const newParentValidation = getNationalActivityValidation(pe.national_activity_id, next);
-    if (!newParentValidation.ok) {
-      showToast(`Plan entry not updated: ${newParentValidation.reason}`);
-      return;
-    }
-
-    if (old && old.national_activity_id !== pe.national_activity_id) {
-      const oldParentValidation = getNationalActivityValidation(old.national_activity_id, next);
-      if (!oldParentValidation.ok) {
-        showToast(`Plan entry not updated: ${oldParentValidation.reason}`);
-        return;
-      }
-    }
-
-    setPlanEntries(next);
+    setPlanEntries(prev => prev.map(x => (x.id === pe.id ? pe : x)));
     const na = nationalActivities.find(n => n.id === pe.national_activity_id);
-    showToast(`Plan entry updated. National Activity ${na?.code || ''} Target/Budget ceilings remain unchanged.`);
+    showToast(`Plan entry updated. ${na?.code || ''}'s aggregated Target/Budget recalculates automatically.`);
   };
 
   const deletePlanEntry = (id: string) => {
@@ -273,11 +198,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!old) return;
     if (!roleOwnsPlanEntry(currentRole, old, regions, projects)) { showToast('This coordinator can only delete entries for their assigned project or region.'); return; }
     if (old.approval_status === 'Approved') { showToast('This plan entry is already approved and locked. It can no longer be deleted.'); return; }
-    const next = planEntries.filter(x => x.id !== id);
-    setPlanEntries(next);
+    setPlanEntries(prev => prev.filter(x => x.id !== id));
     setQuarterlyPlans(prev => prev.filter(qp => qp.plan_entry_id !== id));
     setQuarterlyActuals(prev => prev.filter(a => a.plan_entry_id !== id));
-    showToast('Plan entry, its quarterly plan and its quarterly actuals deleted. National Activity Target/Budget ceilings remain unchanged.');
+    showToast("Plan entry, its quarterly plan and its quarterly actuals deleted. The parent National Activity's aggregated Target/Budget updates automatically.");
   };
 
   // ---------------------------------------------------------------------
@@ -324,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeRoute, setActiveRoute, currentRole, setCurrentRole, toastMessage, showToast,
       selectedNationalActivityId, setSelectedNationalActivityId,
       strategicPriorities,
-      nationalActivities, addNationalActivity, updateNationalActivity, deleteNationalActivity,
+      nationalActivities,
       regions, addRegion,
       zones, addZone,
       projects, addProject, quarters,

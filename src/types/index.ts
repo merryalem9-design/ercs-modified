@@ -4,10 +4,11 @@
 // The goal at this stage is to make one pipeline crystal clear:
 //
 //   Strategic Priority (grouping)
-//     -> National Activity (data entry, auto-synced from Plan Entries)
-//       -> Plan Entry (data entry — the fixed annual target/budget for a
-//                       Region/Project; itself goes through
-//                       Draft -> Pending Approval -> Approved/Rejected)
+//     -> National Activity (FIXED reference data — code/description/uom only;
+//                            its Target and Budget are never stored, they are
+//                            always the live sum of its linked Plan Entries)
+//       -> Plan Entry (data entry — the annual target/budget for a
+//                       Region/Project executing against a National Activity)
 //         -> Quarterly Plan (data entry — Q1-Q4 breakdown of that Plan
 //                             Entry; does NOT overwrite the Plan Entry, just
 //                             reconciles against it. EACH QUARTER has its own
@@ -47,7 +48,13 @@ export interface Zone {
   name: string;
 }
 
-/** The top-level "what" — a National Activity with its own official annual target. */
+/**
+ * The top-level "what" — a National Activity. This is FIXED, Excel-sourced
+ * reference data: no annual_target/annual_budget is stored here. Its
+ * aggregate Target and Budget are always computed live as the sum of the
+ * Plan Entries linked to it (see sumTarget/sumBudget in utils/calculations).
+ * There is nothing to set and nothing that can ever get out of sync.
+ */
 export interface NationalActivity {
   id: string;
   strategic_priority_id: string; // links up to a StrategicPriority
@@ -57,8 +64,6 @@ export interface NationalActivity {
   responsibility: Responsibility; // HQ, Branch, or Both
   region_id?: string;     // optional — set when this activity is scoped to a specific Region
   zone_id?: string;       // optional — set when this activity is scoped to a specific Zone within that Region
-  annual_target: number;  // Official national target for this activity
-  annual_budget: number;  // Official national budget (ETB) for this activity
 }
 
 export interface Project { id: string; name: string; }
