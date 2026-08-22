@@ -15,7 +15,7 @@ import {
   convertToBeneficiaries,
 } from '../utils/calculations';
 import { PlanEntry, ScopeType, Project } from '../types';
-import { ArrowUpRight, ChevronRight, Layers, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, Layers, Plus, Save, Trash2, X } from 'lucide-react';
 
 interface PeWizardFormState {
   id?: string;
@@ -632,11 +632,32 @@ const LabeledInput: React.FC<{ label: string; value: string; onChange: (v: strin
   </label>
 );
 
+// ============================================================
+// ModalShell — FIXED: the card is now capped at 90vh and only the body
+// scrolls. Previously it had no max-height/overflow handling, so on tall
+// content (like the two-step Plan Entry wizard) the whole card centered
+// vertically and pushed BOTH the close button (top) and the Back/Save
+// buttons (bottom) off-screen with no way to scroll to them. The header —
+// with an explicit "Back" control plus the existing "X" — is now pinned
+// outside the scroll area, so there's always a way back to the underlying
+// page no matter how tall the step content gets.
+// ============================================================
 const ModalShell: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
   <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5">
-      <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black">{title}</h3><button onClick={onClose}><X className="w-4 h-4" /></button></div>
-      {children}
+    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b shrink-0">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-ercs-red shrink-0"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
+        </button>
+        <h3 className="text-sm font-black text-slate-800 text-center flex-1 truncate">{title}</h3>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 shrink-0" aria-label="Close">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="p-5 overflow-y-auto">{children}</div>
     </div>
   </div>
 );

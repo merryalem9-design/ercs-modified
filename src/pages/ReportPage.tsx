@@ -208,6 +208,10 @@ export const ReportPage: React.FC = () => {
         />
       </div>
 
+      {/* BREAKDOWN BY NATIONAL ACTIVITY — moved above the raw execution
+          entries table so the rolled-up view is seen first. */}
+      <NationalActivityReportTable rows={byNational} />
+
       {/* EXECUTION ENTRIES TABLE */}
       <ExecutionEntriesTable
         entries={entries}
@@ -220,8 +224,7 @@ export const ReportPage: React.FC = () => {
         quarterId={q}
       />
 
-      {/* BREAKDOWN TABLES */}
-      <NationalActivityReportTable rows={byNational} />
+      {/* REMAINING BREAKDOWN TABLES */}
       <ScopeReportTable title="By Region" rows={byRegion} />
       <ScopeReportTable title="By Project" rows={byProject} />
     </div>
