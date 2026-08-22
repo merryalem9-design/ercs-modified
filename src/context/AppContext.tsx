@@ -153,8 +153,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!na || na.strategic_priority_id !== filters.strategicPriorityId) return false;
     }
     if (filters.nationalActivityId !== 'ALL' && pe.national_activity_id !== filters.nationalActivityId) return false;
-    if (filters.regionId !== 'ALL' && pe.region_id !== filters.regionId) return false;
-    if (filters.projectId !== 'ALL' && pe.project_id !== filters.projectId) return false;
+    // 'NONE' is a Report-page-only display toggle (see FilterBar's
+    // allowNoneScope / ReportPage's "By National Activity only" view) — it
+    // never removes a Plan Entry from scope, it's treated exactly like
+    // 'ALL' here. Only a real Region/Project id actually restricts entries.
+    if (filters.regionId !== 'ALL' && filters.regionId !== 'NONE' && pe.region_id !== filters.regionId) return false;
+    if (filters.projectId !== 'ALL' && filters.projectId !== 'NONE' && pe.project_id !== filters.projectId) return false;
     return true;
   });
 

@@ -49,7 +49,15 @@ export const PlanPage: React.FC = () => {
   const isQuarterScoped = q !== 'ALL';
 
   const isCoordinator = currentRole !== 'National Activity AOP';
-  const hasRegionOrProjectFilter = filters.regionId !== 'ALL' || filters.projectId !== 'ALL';
+  // 'NONE' is a Report-page-only display toggle (see FilterBar's
+  // allowNoneScope) — it never restricts which Plan Entries are in scope
+  // (see AppContext's getFilteredPlanEntries), so it must be treated the
+  // same as 'ALL' here too. Otherwise a stale Region/Project = 'NONE' left
+  // over from a Report page visit would incorrectly flip this page out of
+  // its aggregated view.
+  const hasRegionOrProjectFilter =
+    (filters.regionId !== 'ALL' && filters.regionId !== 'NONE') ||
+    (filters.projectId !== 'ALL' && filters.projectId !== 'NONE');
   // Regional/Project coordinators are already scoped to their own entries by
   // role, so they always see the flat execution-entries view. The AOP sees
   // the rolled-up National-Aggregated view unless they've drilled into a
@@ -633,14 +641,10 @@ const LabeledInput: React.FC<{ label: string; value: string; onChange: (v: strin
 );
 
 // ============================================================
-// ModalShell — FIXED: the card is now capped at 90vh and only the body
-// scrolls. Previously it had no max-height/overflow handling, so on tall
-// content (like the two-step Plan Entry wizard) the whole card centered
-// vertically and pushed BOTH the close button (top) and the Back/Save
-// buttons (bottom) off-screen with no way to scroll to them. The header —
-// with an explicit "Back" control plus the existing "X" — is now pinned
-// outside the scroll area, so there's always a way back to the underlying
-// page no matter how tall the step content gets.
+// ModalShell — capped at 90vh with only the body scrolling. The header
+// (with an explicit "Back" control plus the "X") is pinned outside the
+// scroll area, so there's always a way back out no matter how tall the
+// step content gets.
 // ============================================================
 const ModalShell: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
   <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4">

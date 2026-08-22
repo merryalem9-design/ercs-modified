@@ -2,7 +2,18 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Filter, RotateCcw } from 'lucide-react';
 
-export const FilterBar: React.FC = () => {
+interface FilterBarProps {
+  /** When true, adds a "None" option to the Region and Project selects.
+   *  Picking it doesn't remove any Plan Entries from scope — AppContext's
+   *  getFilteredPlanEntries treats 'NONE' exactly like 'ALL' — it's purely
+   *  a display signal a page can read off `filters` to hide its own
+   *  region/project-level breakdown and show just the National Activity
+   *  summary. Off by default, so every other page keeps its exact current
+   *  behavior and never even renders the option. */
+  allowNoneScope?: boolean;
+}
+
+export const FilterBar: React.FC<FilterBarProps> = ({ allowNoneScope = false }) => {
   const { filters, setFilters, resetFilters, currentRole, nationalActivities, regions, projects, quarters } = useApp();
 
   const isRegionalRole = currentRole.startsWith('Regional Coordinator — ');
@@ -15,12 +26,24 @@ export const FilterBar: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
+    // Only a real, specific Region/Project id should force the other
+    // dimension back to 'ALL'. 'ALL' and 'NONE' both mean "not a specific
+    // scope", so either can be picked on both sides at once — e.g.
+    // Region=NONE and Project=NONE together, to ask for "no breakdown".
+    const isSpecificSelection = value !== 'ALL' && value !== 'NONE';
     setFilters(prev => {
-      if (name === 'regionId' && value !== 'ALL') return { ...prev, regionId: value, projectId: 'ALL' };
-      if (name === 'projectId' && value !== 'ALL') return { ...prev, projectId: value, regionId: 'ALL' };
+      if (name === 'regionId' && isSpecificSelection) return { ...prev, regionId: value, projectId: 'ALL' };
+      if (name === 'projectId' && isSpecificSelection) return { ...prev, projectId: value, regionId: 'ALL' };
       return { ...prev, [name]: value };
     });
   };
+
+  // If a 'NONE' value leaked in from a page that allows it (e.g. Report)
+  // and the user navigated to a page that doesn't render that option,
+  // show the select as 'All' instead of a value with no matching <option>.
+  // The underlying filters.regionId/projectId state is left untouched.
+  const regionSelectValue = filters.regionId === 'NONE' && !allowNoneScope ? 'ALL' : filters.regionId;
+  const projectSelectValue = filters.projectId === 'NONE' && !allowNoneScope ? 'ALL' : filters.projectId;
 
   return (
     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
@@ -44,8 +67,9 @@ export const FilterBar: React.FC = () => {
         {(!isProjectRole) && (
           <div>
             <label className="block text-[10px] font-bold text-slate-500 mb-1">Region</label>
-            <select name="regionId" value={filters.regionId} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
+            <select name="regionId" value={regionSelectValue} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
               <option value="ALL">All Regions</option>
+              {allowNoneScope && <option value="NONE">None (National Activity Only)</option>}
               {visibleRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </div>
@@ -53,8 +77,9 @@ export const FilterBar: React.FC = () => {
         {(!isRegionalRole) && (
           <div>
             <label className="block text-[10px] font-bold text-slate-500 mb-1">Project</label>
-            <select name="projectId" value={filters.projectId} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
+            <select name="projectId" value={projectSelectValue} onChange={handleChange} className="w-full text-xs font-medium border-slate-200 rounded-lg bg-slate-50 py-1.5">
               <option value="ALL">All Projects</option>
+              {allowNoneScope && <option value="NONE">None (National Activity Only)</option>}
               {visibleProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>

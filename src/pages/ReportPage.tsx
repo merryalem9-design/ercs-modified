@@ -20,7 +20,7 @@ import {
   QuarterlyActual,
   UomFactorConfig,
 } from '../types';
-import { Target, Wallet, Users, TrendingUp } from 'lucide-react';
+import { Target, Wallet, Users, TrendingUp, Layers } from 'lucide-react';
 
 /** Beneficiary % = beneficiaries actually reached vs. beneficiaries planned. */
 const beneficiaryPct = (actualBen: number, totalBen: number): number =>
@@ -40,6 +40,13 @@ export const ReportPage: React.FC = () => {
 
   const entries = getFilteredPlanEntries();
   const q = filters.quarterId;
+
+  // 'NONE' on either select means "skip the Region/Project-level detail,
+  // just show me the National Activity summary" — see FilterBar's
+  // allowNoneScope. It never restricts `entries` itself (AppContext treats
+  // it the same as 'ALL'), so the KPI cards and the National Activity table
+  // below are always the full totals for whatever else is filtered.
+  const hideDetailBreakdown = filters.regionId === 'NONE' || filters.projectId === 'NONE';
 
   const uomsFor = (es: PlanEntry[]) =>
     Array.from(
@@ -173,11 +180,13 @@ export const ReportPage: React.FC = () => {
           pages — every figure is a bottom-up sum, there's no nationally assigned ceiling behind it.
           When a specific quarter is selected, Target/Budget compare against that quarter's Quarterly
           Plan instead of the full annual figure. Total Beneficiaries is the planned reach (Target ×
-          conversion factor); Actual Beneficiaries is what's actually been reached so far.
+          conversion factor); Actual Beneficiaries is what's actually been reached so far. Set Region
+          or Project to "None" below to hide the detailed breakdown tables and see just the National
+          Activity summary.
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar allowNoneScope />
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -208,25 +217,36 @@ export const ReportPage: React.FC = () => {
         />
       </div>
 
-      {/* BREAKDOWN BY NATIONAL ACTIVITY — moved above the raw execution
-          entries table so the rolled-up view is seen first. */}
+      {/* BREAKDOWN BY NATIONAL ACTIVITY — always shown first/top-level. */}
       <NationalActivityReportTable rows={byNational} />
 
-      {/* EXECUTION ENTRIES TABLE */}
-      <ExecutionEntriesTable
-        entries={entries}
-        nationalActivities={nationalActivities}
-        regions={regions}
-        projects={projects}
-        quarterlyPlans={quarterlyPlans}
-        quarterlyActuals={quarterlyActuals}
-        uomConfigs={uomConfigs}
-        quarterId={q}
-      />
+      {hideDetailBreakdown ? (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-2.5 text-xs text-blue-800 font-semibold">
+          <Layers className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            Showing the National Activity summary only. Set Region and Project back to "All" in the
+            filters above to see the full Execution Plan Entries, By Region and By Project breakdowns
+            again.
+          </span>
+        </div>
+      ) : (
+        <>
+          {/* EXECUTION ENTRIES TABLE */}
+          <ExecutionEntriesTable
+            entries={entries}
+            nationalActivities={nationalActivities}
+            regions={regions}
+            projects={projects}
+            quarterlyPlans={quarterlyPlans}
+            quarterlyActuals={quarterlyActuals}
+            uomConfigs={uomConfigs}
+            quarterId={q}
+          />
 
-      {/* REMAINING BREAKDOWN TABLES */}
-      <ScopeReportTable title="By Region" rows={byRegion} />
-      <ScopeReportTable title="By Project" rows={byProject} />
+          <ScopeReportTable title="By Region" rows={byRegion} />
+          <ScopeReportTable title="By Project" rows={byProject} />
+        </>
+      )}
     </div>
   );
 };
