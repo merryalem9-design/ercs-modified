@@ -345,8 +345,8 @@ export const PlanPage: React.FC = () => {
 };
 
 // ============================================================
-// PlanEntryWizardModal — exported so NationalActivityDetailPage can reuse it
-// for its own "Add Plan Entry" call-to-action.
+// PlanEntryWizardModal — exported so NationalActivityDetailPage and
+// ScopeDetailPage can reuse it for their own "Add Plan Entry" flows.
 // ============================================================
 export const PlanEntryWizardModal: React.FC<{
   initial: PeWizardFormState;
@@ -641,7 +641,9 @@ const ModalShell: React.FC<{ title: string; onClose: () => void; children: React
   </div>
 );
 
-const ConfirmDeleteModal: React.FC<{ label: string; onCancel: () => void; onConfirm: () => void }> = ({ label, onCancel, onConfirm }) => (
+// Exported so ScopeDetailPage (and any other page listing Plan Entries) can
+// reuse the exact same confirmation dialog instead of duplicating it.
+export const ConfirmDeleteModal: React.FC<{ label: string; onCancel: () => void; onConfirm: () => void }> = ({ label, onCancel, onConfirm }) => (
   <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
     <div className="bg-white max-w-md w-full rounded-xl shadow-2xl p-5">
       <div className="flex items-center gap-2 text-red-700 font-black text-sm"><Trash2 className="w-5 h-5" /> Delete "{label}"?</div>

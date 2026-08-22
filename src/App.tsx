@@ -9,6 +9,7 @@ import { QuarterlyPlanPage } from './pages/QuarterlyPlanPage';
 import { QuarterlyEntryPage } from './pages/QuarterlyEntryPage';
 import { ReportPage } from './pages/ReportPage';
 import { NationalActivityDetailPage } from './pages/NationalActivityDetailPage';
+import { ScopeDetailPage } from './pages/ScopeDetailPage';
 import { SubmissionsPage } from './pages/SubmissionsPage';
 
 // Quarterly Plan / Quarterly Actual Entry are not applicable to the
@@ -35,6 +36,7 @@ const MainLayout: React.FC = () => {
       case 'quarterly': return <QuarterlyEntryPage />;
       case 'report': return <ReportPage />;
       case 'national-detail': return <NationalActivityDetailPage />;
+      case 'scope-detail': return <ScopeDetailPage />;
       case 'submissions': return <SubmissionsPage />;
       default: return <PlanPage />;
     }

@@ -46,6 +46,7 @@ export const Sidebar: React.FC = () => {
     planEntries,
     regions,
     projects,
+    filters,
     setSelectedNationalActivityId,
     setFilters,
   } = useApp();
@@ -131,20 +132,19 @@ export const Sidebar: React.FC = () => {
     setActiveRoute('national-detail');
   };
 
-  const openChild = (
-    nationalActivityId: string,
-    scopeType: 'Project' | 'Regional',
-    scopeId: string
-  ) => {
-    setSelectedNationalActivityId(nationalActivityId);
+  // Clicking a Project/Region opens a scope-wide view of everything it
+  // executes — across every National Activity it's linked to, not just the
+  // one it happened to be expanded under. Mirrors the Excel workbook's own
+  // per-Project/Region sheet, which likewise lists every linked activity.
+  const openScope = (scopeType: 'Project' | 'Regional', scopeId: string) => {
     setFilters(prev => ({
       ...prev,
       strategicPriorityId: 'ALL',
-      nationalActivityId,
+      nationalActivityId: 'ALL',
       projectId: scopeType === 'Project' ? scopeId : 'ALL',
       regionId: scopeType === 'Regional' ? scopeId : 'ALL',
     }));
-    setActiveRoute('national-detail');
+    setActiveRoute('scope-detail');
   };
 
   return (
@@ -177,7 +177,7 @@ export const Sidebar: React.FC = () => {
                     setActiveRoute('plan');
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all text-left ${
-                    activeRoute === 'plan' || activeRoute === 'national-detail'
+                    activeRoute === 'plan' || activeRoute === 'national-detail' || activeRoute === 'scope-detail'
                       ? 'bg-ercs-red text-white font-bold'
                       : 'text-slate-300 hover:bg-slate-800'
                   }`}
@@ -187,7 +187,7 @@ export const Sidebar: React.FC = () => {
                     <div>{label}</div>
                     <div
                       className={`text-[10px] font-normal ${
-                        activeRoute === 'plan' || activeRoute === 'national-detail'
+                        activeRoute === 'plan' || activeRoute === 'national-detail' || activeRoute === 'scope-detail'
                           ? 'text-red-100'
                           : 'text-slate-500'
                       }`}
@@ -238,16 +238,21 @@ export const Sidebar: React.FC = () => {
                                 </div>
                               )}
 
-                              {children.projects.map(project => (
-                                <button
-                                  key={project.id}
-                                  onClick={() => openChild(na.id, 'Project', project.id)}
-                                  className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-slate-400 hover:text-white hover:bg-slate-800"
-                                >
-                                  <FolderGit2 className="w-3 h-3 shrink-0 text-purple-300" />
-                                  <span className="truncate">{project.name}</span>
-                                </button>
-                              ))}
+                              {children.projects.map(project => {
+                                const isSelected = activeRoute === 'scope-detail' && filters.projectId === project.id;
+                                return (
+                                  <button
+                                    key={project.id}
+                                    onClick={() => openScope('Project', project.id)}
+                                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left ${
+                                      isSelected ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    <FolderGit2 className="w-3 h-3 shrink-0 text-purple-300" />
+                                    <span className="truncate">{project.name}</span>
+                                  </button>
+                                );
+                              })}
 
                               {children.regions.length > 0 && (
                                 <div className="text-[9px] uppercase tracking-wider text-slate-500 px-2 pt-1">
@@ -255,16 +260,21 @@ export const Sidebar: React.FC = () => {
                                 </div>
                               )}
 
-                              {children.regions.map(region => (
-                                <button
-                                  key={region.id}
-                                  onClick={() => openChild(na.id, 'Regional', region.id)}
-                                  className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-slate-400 hover:text-white hover:bg-slate-800"
-                                >
-                                  <MapPin className="w-3 h-3 shrink-0 text-blue-300" />
-                                  <span className="truncate">{region.name}</span>
-                                </button>
-                              ))}
+                              {children.regions.map(region => {
+                                const isSelected = activeRoute === 'scope-detail' && filters.regionId === region.id;
+                                return (
+                                  <button
+                                    key={region.id}
+                                    onClick={() => openScope('Regional', region.id)}
+                                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-left ${
+                                      isSelected ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    <MapPin className="w-3 h-3 shrink-0 text-blue-300" />
+                                    <span className="truncate">{region.name}</span>
+                                  </button>
+                                );
+                              })}
 
                               {children.projects.length === 0 && children.regions.length === 0 && (
                                 <div className="px-2 py-1 text-[10px] text-slate-600">
