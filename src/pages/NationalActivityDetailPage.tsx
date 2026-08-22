@@ -71,8 +71,14 @@ export const NationalActivityDetailPage: React.FC = () => {
   const budget = sumPlannedBudget(children, quarterlyPlans, quarterId);
   const spent = sumExpenditure(children, quarterlyActuals, quarterId);
   const util = budgetUtilizationPct(spent, budget);
-  const beneficiaries = convertToBeneficiaries(actual, na.uom, uomConfigs);
   const factor = uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0;
+  // Total = planned reach (Target × factor); Actual = beneficiaries reached
+  // so far (Actual × factor) — both shown together so "Beneficiaries" means
+  // the same thing here as it does on the Report and Scope pages, instead
+  // of silently being Actual-only on this page while Plan Page shows
+  // Target-only under the same column name.
+  const totalBeneficiaries = convertToBeneficiaries(target, na.uom, uomConfigs);
+  const actualBeneficiaries = convertToBeneficiaries(actual, na.uom, uomConfigs);
 
   // National Activity AOP has no assigned Region/Project of their own, so
   // they neither create Plan Entries in isolation from a Region/Project
@@ -217,7 +223,12 @@ export const NationalActivityDetailPage: React.FC = () => {
               </div>
             }
           />
-          <StatCard icon={Users} label="Beneficiaries Reached" value={beneficiaries.toLocaleString()} sub={<span className="text-slate-400">{na.uom} × {factor} conversion</span>} />
+          <StatCard
+            icon={Users}
+            label="Beneficiaries Reached"
+            value={actualBeneficiaries.toLocaleString()}
+            sub={<span className="text-slate-400">of {totalBeneficiaries.toLocaleString()} planned · {na.uom} × {factor}</span>}
+          />
         </div>
       </div>
 
@@ -247,7 +258,8 @@ export const NationalActivityDetailPage: React.FC = () => {
                   <th className="p-3 text-right">Actual</th>
                   <th className="p-3 text-right">Budget</th>
                   <th className="p-3 text-right">Spent</th>
-                  <th className="p-3 text-right">Beneficiaries</th>
+                  <th className="p-3 text-right">Total Beneficiaries</th>
+                  <th className="p-3 text-right">Actual Beneficiaries</th>
                   <th className="p-3 text-right">% Utilization</th>
                   <th className="p-3 text-center">Status</th>
                   <th className="p-3 text-center">Actions</th>
@@ -262,7 +274,8 @@ export const NationalActivityDetailPage: React.FC = () => {
                   const peSpent = sumExpenditure([pe], quarterlyActuals, quarterId);
                   const peAchievement = achievementPct(peActual, peTarget);
                   const peUtil = budgetUtilizationPct(peSpent, peBudget);
-                  const peBeneficiaries = convertToBeneficiaries(peActual, na.uom, uomConfigs);
+                  const peTotalBeneficiaries = convertToBeneficiaries(peTarget, na.uom, uomConfigs);
+                  const peActualBeneficiaries = convertToBeneficiaries(peActual, na.uom, uomConfigs);
                   return (
                     <tr key={pe.id} className="hover:bg-slate-50">
                       <td className="p-3">
@@ -274,8 +287,12 @@ export const NationalActivityDetailPage: React.FC = () => {
                       <td className="p-3 text-right whitespace-nowrap">ETB {peBudget.toLocaleString()}</td>
                       <td className="p-3 text-right whitespace-nowrap">ETB {peSpent.toLocaleString()}</td>
                       <td className="p-3 text-right whitespace-nowrap">
-                        <div>{peBeneficiaries.toLocaleString()}</div>
-                        <div className="text-[9px] text-slate-400">×{uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0}</div>
+                        <div>{peTotalBeneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Target × {factor}</div>
+                      </td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="font-bold text-blue-600">{peActualBeneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Actual × {factor}</div>
                       </td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{peUtil.toFixed(1)}%</td>
                       <td className="p-3 text-center"><StatusBadge achievementPct={peAchievement} hasActuals={peActual > 0} /></td>

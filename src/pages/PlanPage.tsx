@@ -141,17 +141,24 @@ export const PlanPage: React.FC = () => {
   const aggregatedRows = naInScope.map(na => {
     const naEntries = filteredEntries.filter(pe => pe.national_activity_id === na.id);
     const target = sumPlannedTarget(naEntries, quarterlyPlans, q);
+    const actual = sumActual(naEntries, quarterlyActuals, q);
     const budget = sumPlannedBudget(naEntries, quarterlyPlans, q);
     const spent = sumExpenditure(naEntries, quarterlyActuals, q);
     const utilization = budgetUtilizationPct(spent, budget);
     const factor = uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0;
+    // Total = planned reach (Target × factor); Actual = beneficiaries
+    // reached so far (Actual × factor) — showing both keeps this figure
+    // consistent with the Report/Scope pages instead of only ever showing
+    // the planned side here.
     const beneficiaries = convertToBeneficiaries(target, na.uom, uomConfigs);
-    return { na, entryCount: naEntries.length, target, budget, spent, utilization, beneficiaries, factor };
+    const actualBeneficiaries = convertToBeneficiaries(actual, na.uom, uomConfigs);
+    return { na, entryCount: naEntries.length, target, actual, budget, spent, utilization, beneficiaries, actualBeneficiaries, factor };
   });
 
   const aggregatedTotalBudget = aggregatedRows.reduce((s, r) => s + r.budget, 0);
   const aggregatedTotalSpent = aggregatedRows.reduce((s, r) => s + r.spent, 0);
   const aggregatedTotalBeneficiaries = aggregatedRows.reduce((s, r) => s + r.beneficiaries, 0);
+  const aggregatedTotalActualBeneficiaries = aggregatedRows.reduce((s, r) => s + r.actualBeneficiaries, 0);
   const aggregatedTotalUtilization = budgetUtilizationPct(aggregatedTotalSpent, aggregatedTotalBudget);
 
   // ---------------------------------------------------------------------
@@ -167,13 +174,15 @@ export const PlanPage: React.FC = () => {
     const utilization = budgetUtilizationPct(spent, budget);
     const factor = na ? (uomConfigs.find(c => c.uom.toLowerCase() === na.uom.toLowerCase())?.factor ?? 0) : 0;
     const beneficiaries = convertToBeneficiaries(target, na?.uom || '', uomConfigs);
+    const actualBeneficiaries = convertToBeneficiaries(actual, na?.uom || '', uomConfigs);
     const scopeName = pe.scope_type === 'Regional' ? regions.find(r => r.id === pe.region_id)?.name : projects.find(p => p.id === pe.project_id)?.name;
-    return { pe, na, target, budget, actual, spent, achievement, utilization, beneficiaries, factor, scopeName };
+    return { pe, na, target, budget, actual, spent, achievement, utilization, beneficiaries, actualBeneficiaries, factor, scopeName };
   });
 
   const executionTotalBudget = executionRows.reduce((s, r) => s + r.budget, 0);
   const executionTotalSpent = executionRows.reduce((s, r) => s + r.spent, 0);
   const executionTotalBeneficiaries = executionRows.reduce((s, r) => s + r.beneficiaries, 0);
+  const executionTotalActualBeneficiaries = executionRows.reduce((s, r) => s + r.actualBeneficiaries, 0);
   const executionTotalUtilization = budgetUtilizationPct(executionTotalSpent, executionTotalBudget);
 
   return (
@@ -217,7 +226,8 @@ export const PlanPage: React.FC = () => {
                     <th className="p-3">UOM</th>
                     <th className="p-3 text-right">Target</th>
                     <th className="p-3 text-right">Budget (ETB)</th>
-                    <th className="p-3 text-right">Beneficiaries</th>
+                    <th className="p-3 text-right">Total Beneficiaries</th>
+                    <th className="p-3 text-right">Actual Beneficiaries</th>
                     <th className="p-3 text-right">% Utilization</th>
                     <th className="p-3 text-center">Open</th>
                   </tr>
@@ -238,6 +248,10 @@ export const PlanPage: React.FC = () => {
                         <div className="font-bold">{row.beneficiaries.toLocaleString()}</div>
                         <div className="text-[9px] text-slate-400">Target × {row.factor}</div>
                       </td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="font-bold text-blue-600">{row.actualBeneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Actual × {row.factor}</div>
+                      </td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{row.utilization.toFixed(1)}%</td>
                       <td className="p-3 text-center">
                         <button onClick={() => viewLinkMap(row.na.id)} className="text-[10px] font-bold text-ercs-red inline-flex items-center gap-0.5">
@@ -253,6 +267,7 @@ export const PlanPage: React.FC = () => {
                     <td className="p-3 text-right text-slate-300" title="Targets use different units across activities and are not summable">—</td>
                     <td className="p-3 text-right">{aggregatedTotalBudget.toLocaleString()}</td>
                     <td className="p-3 text-right">{aggregatedTotalBeneficiaries.toLocaleString()}</td>
+                    <td className="p-3 text-right">{aggregatedTotalActualBeneficiaries.toLocaleString()}</td>
                     <td className="p-3 text-right">{aggregatedTotalUtilization.toFixed(1)}%</td>
                     <td className="p-3"></td>
                   </tr>
@@ -281,7 +296,8 @@ export const PlanPage: React.FC = () => {
                     <th className="p-3">Executed By</th>
                     <th className="p-3 text-right">Target</th>
                     <th className="p-3 text-right">Budget (ETB)</th>
-                    <th className="p-3 text-right">Beneficiaries</th>
+                    <th className="p-3 text-right">Total Beneficiaries</th>
+                    <th className="p-3 text-right">Actual Beneficiaries</th>
                     <th className="p-3 text-right">% Utilization</th>
                     <th className="p-3 text-center">Status</th>
                     {isCoordinator && <th className="p-3 text-center">Actions</th>}
@@ -303,6 +319,10 @@ export const PlanPage: React.FC = () => {
                         <div className="font-bold">{row.beneficiaries.toLocaleString()}</div>
                         <div className="text-[9px] text-slate-400">Target × {row.factor}</div>
                       </td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <div className="font-bold text-blue-600">{row.actualBeneficiaries.toLocaleString()}</div>
+                        <div className="text-[9px] text-slate-400">Actual × {row.factor}</div>
+                      </td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{row.utilization.toFixed(1)}%</td>
                       <td className="p-3 text-center"><StatusBadge achievementPct={row.achievement} hasActuals={row.actual > 0} /></td>
                       {isCoordinator && (
@@ -322,6 +342,7 @@ export const PlanPage: React.FC = () => {
                     <td className="p-3 text-right text-slate-300" title="Targets use different units across activities and are not summable">—</td>
                     <td className="p-3 text-right">{executionTotalBudget.toLocaleString()}</td>
                     <td className="p-3 text-right">{executionTotalBeneficiaries.toLocaleString()}</td>
+                    <td className="p-3 text-right">{executionTotalActualBeneficiaries.toLocaleString()}</td>
                     <td className="p-3 text-right">{executionTotalUtilization.toFixed(1)}%</td>
                     <td className="p-3" colSpan={isCoordinator ? 2 : 1}></td>
                   </tr>

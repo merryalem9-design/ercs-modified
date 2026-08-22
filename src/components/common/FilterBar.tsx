@@ -34,6 +34,20 @@ export const FilterBar: React.FC<FilterBarProps> = ({ allowNoneScope = false }) 
     setFilters(prev => {
       if (name === 'regionId' && isSpecificSelection) return { ...prev, regionId: value, projectId: 'ALL' };
       if (name === 'projectId' && isSpecificSelection) return { ...prev, projectId: value, regionId: 'ALL' };
+      // Picking 'NONE' means "collapse to the National Activity summary
+      // only" — it must never silently coexist with the OTHER side still
+      // pinned to one specific Region/Project (that would keep narrowing
+      // the totals underneath while the UI implies a full, unscoped view).
+      // So if the other side currently holds a specific id, clear it back
+      // to 'ALL' too. Two 'NONE's together (the "no breakdown at all" case)
+      // is unaffected by this, since 'NONE' itself is never the thing being
+      // cleared here.
+      if (name === 'regionId' && value === 'NONE' && prev.projectId !== 'ALL' && prev.projectId !== 'NONE') {
+        return { ...prev, regionId: value, projectId: 'ALL' };
+      }
+      if (name === 'projectId' && value === 'NONE' && prev.regionId !== 'ALL' && prev.regionId !== 'NONE') {
+        return { ...prev, projectId: value, regionId: 'ALL' };
+      }
       return { ...prev, [name]: value };
     });
   };

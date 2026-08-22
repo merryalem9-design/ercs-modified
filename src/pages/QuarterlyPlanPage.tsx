@@ -10,6 +10,15 @@ const clampNonNegative = (raw: string): number => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
+// Quarterly figures are entered as plain numbers (including fractions, e.g.
+// 1.5 boreholes/quarter), and reconciliation compares a SUM of four such
+// numbers back against the annual figure. Comparing with strict `!==` can
+// flag a false mismatch from ordinary binary floating-point drift (e.g.
+// 0.1 + 0.2 !== 0.3), even when every quarter was entered exactly as
+// intended. A tiny tolerance avoids that false alarm without hiding any
+// real, human-sized discrepancy.
+const RECONCILE_EPSILON = 1e-6;
+
 export const QuarterlyPlanPage: React.FC = () => {
   const { quarters, getFilteredPlanEntries } = useApp();
   const entries = getFilteredPlanEntries();
@@ -72,8 +81,8 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
   const rowPlans = quarters.map(q => quarterlyPlans.find(qp => qp.plan_entry_id === entry.id && qp.quarter_id === q.id));
   const sumT = rowPlans.reduce((s, qp) => s + (qp?.target || 0), 0);
   const sumB = rowPlans.reduce((s, qp) => s + (qp?.budget || 0), 0);
-  const targetMismatch = sumT !== entry.annual_target;
-  const budgetMismatch = sumB !== entry.annual_budget;
+  const targetMismatch = Math.abs(sumT - entry.annual_target) > RECONCILE_EPSILON;
+  const budgetMismatch = Math.abs(sumB - entry.annual_budget) > RECONCILE_EPSILON;
 
   const setQuarterField = (quarterId: QuarterId, field: 'target' | 'budget', raw: string) => {
     let value = clampNonNegative(raw);
@@ -93,19 +102,22 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
     });
   };
 
+  // A true even split — annual/4 for every quarter, fractions included.
+  // Some UOMs (e.g. "6 boreholes") don't divide into 4 whole numbers, and
+  // the seeded data already relies on that (1.5/quarter for an annual
+  // target of 6). Dividing by 4 is exact in binary floating point (4 is a
+  // power of two), so this always sums back to the annual figure exactly —
+  // no remainder-to-last-quarter workaround needed.
   const splitEvenly = () => {
-    const baseTarget = Math.floor(entry.annual_target / 4);
-    const remainderTarget = entry.annual_target - baseTarget * 4;
-    const baseBudget = Math.floor(entry.annual_budget / 4);
-    const remainderBudget = entry.annual_budget - baseBudget * 4;
-    quarters.forEach((q, idx) => {
-      const isLast = idx === quarters.length - 1;
+    const evenTarget = entry.annual_target / 4;
+    const evenBudget = entry.annual_budget / 4;
+    quarters.forEach(q => {
       upsertQuarterlyPlan({
         id: `qp-${entry.id}-${q.id}`,
         plan_entry_id: entry.id,
         quarter_id: q.id,
-        target: baseTarget + (isLast ? remainderTarget : 0),
-        budget: baseBudget + (isLast ? remainderBudget : 0),
+        target: evenTarget,
+        budget: evenBudget,
       });
     });
   };

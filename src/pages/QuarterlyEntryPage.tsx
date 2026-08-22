@@ -97,7 +97,11 @@ const EntryRow: React.FC<{
   const hasQuarterlyPlanForThisQuarter = !!planForQuarter;
   const quarterlyAchievement = achievementPct(actualVal, plannedTarget);
   const quarterlyBudgetUtil = budgetUtilizationPct(expVal, plannedBudget);
-  const isOverBudget = quarterlyBudgetUtil > 100;
+  // budgetUtilizationPct reports 0% whenever the planned budget is 0 (there's
+  // no meaningful ratio to compute), which would otherwise hide real spend
+  // against a quarter that was never budgeted — so treat "spent something,
+  // planned nothing" as over budget too, on top of the normal >100% case.
+  const isOverBudget = quarterlyBudgetUtil > 100 || (plannedBudget === 0 && expVal > 0);
 
   const cumulativeActual = sumActual([entry], quarterlyActuals);
   const cumulativeAchievement = achievementPct(cumulativeActual, entry.annual_target);
