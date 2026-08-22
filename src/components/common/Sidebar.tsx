@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const BASE_NAV = [
-  { id: 'plan', label: 'Plan', sub: 'National → Project / Region', icon: ClipboardList },
+  { id: 'plan', label: 'Annual Plan', sub: 'National → Project / Region', icon: ClipboardList },
   { id: 'quarterly-plan', label: 'Quarterly Plan', sub: 'Split targets into Q1–Q4', icon: CalendarClock },
   { id: 'quarterly', label: 'Quarterly Actual Entry', sub: 'Actuals vs quarterly plan', icon: CalendarCheck2 },
   { id: 'report', label: 'Report', sub: 'Aggregated results', icon: BarChart3 },
