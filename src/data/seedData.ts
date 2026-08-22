@@ -16,18 +16,20 @@ export const INITIAL_STRATEGIC_PRIORITIES: StrategicPriority[] = [
   },
 ];
 
-// National Activities with totals computed from the sheets.
+// National Activities with totals computed from the sheets. `activity_description`
+// is sourced verbatim from the "Description" column of the Excel workbook's
+// National Aggregated sheet.
 export const INITIAL_NATIONAL_ACTIVITIES: NationalActivity[] = [
-  { id: 'na-1-1-1', strategic_priority_id: 'sp-1', code: '1.1.1', description: 'Distribute NFI Kits to IDP Households', uom: '# of households', responsibility: 'Both' },
-  { id: 'na-1-1-2', strategic_priority_id: 'sp-1', code: '1.1.2', description: 'Update Woreda-Level Emergency Response Plans', uom: '# of MHCP', responsibility: 'Both' },
-  { id: 'na-1-2-1', strategic_priority_id: 'sp-1', code: '1.2.1', description: 'Rehabilitate Boreholes in Project Woredas', uom: '# of water points', responsibility: 'Both' },
-  { id: 'na-1-2-2', strategic_priority_id: 'sp-1', code: '1.2.2', description: 'Provide Emergency Health and First Aid Services', uom: '# of people reached', responsibility: 'Both' },
-  { id: 'na-2-1-1', strategic_priority_id: 'sp-1', code: '2.1.1', description: 'Conduct Community-Based Disaster Risk Reduction (CBDRR) Training', uom: '# of people trained', responsibility: 'Both' },
-  { id: 'na-2-1-2', strategic_priority_id: 'sp-1', code: '2.1.2', description: 'Establish Community-Based Early Warning Systems', uom: '# of systems established', responsibility: 'Both' },
-  { id: 'na-3-1-1', strategic_priority_id: 'sp-1', code: '3.1.1', description: 'Provide Nutrition Support to Vulnerable Groups', uom: '# of beneficiaries', responsibility: 'Both' },
-  { id: 'na-3-2-1', strategic_priority_id: 'sp-1', code: '3.2.1', description: 'Conduct Health and Hygiene Awareness Campaigns', uom: '# of campaigns', responsibility: 'Both' },
-  { id: 'na-4-1-1', strategic_priority_id: 'sp-1', code: '4.1.1', description: 'Recruit and Train Community Volunteers', uom: '# of volunteers trained', responsibility: 'Both' },
-  { id: 'na-5-1-1', strategic_priority_id: 'sp-1', code: '5.1.1', description: 'Organize Migration and Protection Advocacy Forums', uom: '# of events', responsibility: 'Both' },
+  { id: 'na-1-1-1', strategic_priority_id: 'sp-1', code: '1.1.1', description: 'Distribute NFI Kits to IDP Households', uom: '# of households', responsibility: 'Both', activity_description: "Distribution of NFI kits to internally displaced households under the project's emergency response component." },
+  { id: 'na-1-1-2', strategic_priority_id: 'sp-1', code: '1.1.2', description: 'Update Woreda-Level Emergency Response Plans', uom: '# of MHCP', responsibility: 'Both', activity_description: 'Development/update of woreda-level emergency response and contingency plans.' },
+  { id: 'na-1-2-1', strategic_priority_id: 'sp-1', code: '1.2.1', description: 'Rehabilitate Boreholes in Project Woredas', uom: '# of water points', responsibility: 'Both', activity_description: "Rehabilitation of non-functional boreholes in the project's target woredas." },
+  { id: 'na-1-2-2', strategic_priority_id: 'sp-1', code: '1.2.2', description: 'Provide Emergency Health and First Aid Services', uom: '# of people reached', responsibility: 'Both', activity_description: 'Provision of emergency health services, first aid and referrals to disaster-affected populations.' },
+  { id: 'na-2-1-1', strategic_priority_id: 'sp-1', code: '2.1.1', description: 'Conduct Community-Based Disaster Risk Reduction (CBDRR) Training', uom: '# of people trained', responsibility: 'Both', activity_description: 'Training of community members and volunteers on disaster risk reduction and preparedness.' },
+  { id: 'na-2-1-2', strategic_priority_id: 'sp-1', code: '2.1.2', description: 'Establish Community-Based Early Warning Systems', uom: '# of systems established', responsibility: 'Both', activity_description: 'Establishment/strengthening of early warning systems at community and woreda level.' },
+  { id: 'na-3-1-1', strategic_priority_id: 'sp-1', code: '3.1.1', description: 'Provide Nutrition Support to Vulnerable Groups', uom: '# of beneficiaries', responsibility: 'Both', activity_description: 'Provision of nutrition support/supplementary feeding to malnourished and vulnerable groups.' },
+  { id: 'na-3-2-1', strategic_priority_id: 'sp-1', code: '3.2.1', description: 'Conduct Health and Hygiene Awareness Campaigns', uom: '# of campaigns', responsibility: 'Both', activity_description: 'Community-level awareness campaigns on health, hygiene and disease prevention.' },
+  { id: 'na-4-1-1', strategic_priority_id: 'sp-1', code: '4.1.1', description: 'Recruit and Train Community Volunteers', uom: '# of volunteers trained', responsibility: 'Both', activity_description: 'Recruitment and training of new RCRC volunteers on core competencies and code of conduct.' },
+  { id: 'na-5-1-1', strategic_priority_id: 'sp-1', code: '5.1.1', description: 'Organize Migration and Protection Advocacy Forums', uom: '# of events', responsibility: 'Both', activity_description: 'Advocacy forums on migration and protection with government and partners.' },
 ];
 
 export const INITIAL_REGIONS: Region[] = [

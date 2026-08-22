@@ -213,6 +213,7 @@ export const PlanPage: React.FC = () => {
                   <tr>
                     <th className="p-3">Code</th>
                     <th className="p-3">Activity</th>
+                    <th className="p-3">Description</th>
                     <th className="p-3">UOM</th>
                     <th className="p-3 text-right">Target</th>
                     <th className="p-3 text-right">Budget (ETB)</th>
@@ -229,6 +230,7 @@ export const PlanPage: React.FC = () => {
                         <div className="font-bold text-slate-800">{row.na.description}</div>
                         <div className="text-[9px] text-slate-400 mt-0.5">{row.entryCount} linked plan {row.entryCount === 1 ? 'entry' : 'entries'} · {row.na.responsibility}</div>
                       </td>
+                      <td className="p-3 min-w-64 text-slate-500">{row.na.activity_description}</td>
                       <td className="p-3 whitespace-nowrap text-slate-500 font-semibold">{row.na.uom}</td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{row.target.toLocaleString()}</td>
                       <td className="p-3 text-right whitespace-nowrap">{row.budget.toLocaleString()}</td>
@@ -247,7 +249,7 @@ export const PlanPage: React.FC = () => {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 font-black border-t-2 border-slate-200">
-                    <td className="p-3" colSpan={3}>TOTAL</td>
+                    <td className="p-3" colSpan={4}>TOTAL</td>
                     <td className="p-3 text-right text-slate-300" title="Targets use different units across activities and are not summable">—</td>
                     <td className="p-3 text-right">{aggregatedTotalBudget.toLocaleString()}</td>
                     <td className="p-3 text-right">{aggregatedTotalBeneficiaries.toLocaleString()}</td>

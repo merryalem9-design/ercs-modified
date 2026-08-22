@@ -64,6 +64,13 @@ export interface NationalActivity {
   responsibility: Responsibility; // HQ, Branch, or Both
   region_id?: string;     // optional — set when this activity is scoped to a specific Region
   zone_id?: string;       // optional — set when this activity is scoped to a specific Zone within that Region
+  /**
+   * Full narrative description of this National Activity, sourced from the
+   * "Description" column of the Excel workbook's National Aggregated sheet.
+   * Distinct from `description` above (which is really the Activity
+   * Name/title) — this is the longer explanatory text.
+   */
+  activity_description: string;
 }
 
 export interface Project { id: string; name: string; }
