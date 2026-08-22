@@ -252,7 +252,7 @@ export const ScopeDetailPage: React.FC = () => {
                   <th className="p-3 text-right">Achievement %</th>
                   <th className="p-3 text-right">Budget (ETB)</th>
                   <th className="p-3 text-right">Spent (ETB)</th>
-                  <th className="p-3 text-right">Utilisation %</th>
+                  <th className="p-3 text-right">Utilization %</th>
                   <th className="p-3 text-right">Total Beneficiaries</th>
                   <th className="p-3 text-right">Actual Beneficiaries</th>
                   <th className="p-3 text-right">Beneficiary %</th>
