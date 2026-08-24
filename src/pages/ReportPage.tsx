@@ -26,6 +26,12 @@ import { Target, Wallet, Users, TrendingUp, Layers } from 'lucide-react';
 const beneficiaryPct = (actualBen: number, totalBen: number): number =>
   totalBen === 0 ? 0 : (actualBen / totalBen) * 100;
 
+// KPI card status badges — shown only when a percentage exceeds 100%.
+// Values themselves are never capped; this is purely a visual flag.
+type KpiBadge = { label: string; color: string };
+const OVERACHIEVED_BADGE: KpiBadge = { label: 'Overachieved', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
+const OVER_BUDGET_BADGE: KpiBadge = { label: 'Over Budget', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+
 export const ReportPage: React.FC = () => {
   const {
     nationalActivities,
@@ -196,12 +202,14 @@ export const ReportPage: React.FC = () => {
           sub={`${actual.toLocaleString()} / ${target.toLocaleString()}${singleUom ? ` ${singleUom}` : ''}`}
           icon={Target}
           warning={achievementWarning}
+          statusBadge={achievement > 100 ? OVERACHIEVED_BADGE : undefined}
         />
         <KPICard
           title="Budget Utilization"
           val={`${utilization.toFixed(1)}%`}
           sub={`ETB ${spent.toLocaleString()} / ${budget.toLocaleString()}`}
           icon={Wallet}
+          statusBadge={utilization > 100 ? OVER_BUDGET_BADGE : undefined}
         />
         <KPICard
           title="Beneficiaries Reached"
@@ -252,21 +260,31 @@ export const ReportPage: React.FC = () => {
 };
 
 // ===========================================================================
-// KPI CARD — plain numbers only; no colored status pill (see report spec).
+// KPI CARD — plain numbers, with an optional status badge (e.g. "Over
+// Budget" / "Overachieved") shown next to the value when a percentage
+// exceeds 100%. Values are never capped — the badge is purely a visual flag.
 // ===========================================================================
-const KPICard: React.FC<{ title: string; val: React.ReactNode; sub: React.ReactNode; icon: any; warning?: string }> = ({
-  title,
-  val,
-  sub,
-  icon: Icon,
-  warning,
-}) => (
+const KPICard: React.FC<{
+  title: string;
+  val: React.ReactNode;
+  sub: React.ReactNode;
+  icon: any;
+  warning?: string;
+  statusBadge?: KpiBadge;
+}> = ({ title, val, sub, icon: Icon, warning, statusBadge }) => (
   <div className="bg-white p-4 rounded-xl border shadow-sm">
     <div className="flex justify-between mb-2 text-xs font-bold text-slate-500">
       <span>{title}</span>
       <Icon className="w-4 h-4" />
     </div>
-    <div className="text-2xl font-black text-slate-800">{val}</div>
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="text-2xl font-black text-slate-800">{val}</div>
+      {statusBadge && (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge.color}`}>
+          {statusBadge.label}
+        </span>
+      )}
+    </div>
     <div className="text-[10px] mt-1 text-slate-500">{sub}</div>
     {warning && (
       <div className="mt-2 text-[9px] leading-snug text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1 font-semibold">
