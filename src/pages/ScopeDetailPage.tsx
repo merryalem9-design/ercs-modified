@@ -30,6 +30,12 @@ import {
 const beneficiaryPct = (actualBen: number, totalBen: number): number =>
   totalBen === 0 ? 0 : (actualBen / totalBen) * 100;
 
+// Stat card status badges — shown only when a percentage exceeds 100%.
+// Values themselves are never capped; this is purely a visual flag.
+type StatBadge = { label: string; color: string };
+const OVERACHIEVED_BADGE: StatBadge = { label: 'Overachieved', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
+const OVER_BUDGET_BADGE: StatBadge = { label: 'Over Budget', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+
 /**
  * Shown when a Project or Region is selected from the sidebar. Unlike
  * NationalActivityDetailPage (which is scoped to ONE National Activity),
@@ -217,8 +223,21 @@ export const ScopeDetailPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-          <StatCard icon={Target} label="Achievement" value={`${achievement.toFixed(1)}%`} sub={`${actual.toLocaleString()} / ${target.toLocaleString()}`} warning={achievementWarning} />
-          <StatCard icon={Wallet} label="Budget Utilization" value={`${utilization.toFixed(1)}%`} sub={`ETB ${spent.toLocaleString()} / ${budget.toLocaleString()}`} />
+          <StatCard
+            icon={Target}
+            label="Achievement"
+            value={`${achievement.toFixed(1)}%`}
+            sub={`${actual.toLocaleString()} / ${target.toLocaleString()}`}
+            warning={achievementWarning}
+            statusBadge={achievement > 100 ? OVERACHIEVED_BADGE : undefined}
+          />
+          <StatCard
+            icon={Wallet}
+            label="Budget Utilization"
+            value={`${utilization.toFixed(1)}%`}
+            sub={`ETB ${spent.toLocaleString()} / ${budget.toLocaleString()}`}
+            statusBadge={utilization > 100 ? OVER_BUDGET_BADGE : undefined}
+          />
           <StatCard icon={Users} label="Beneficiaries Reached" value={actualBeneficiaries.toLocaleString()} sub={`of ${totalBeneficiaries.toLocaleString()} planned`} />
           <StatCard icon={Layers} label="Linked Activities" value={String(entries.length)} sub="Matching current filters" />
         </div>
@@ -338,13 +357,27 @@ export const ScopeDetailPage: React.FC = () => {
   );
 };
 
-const StatCard: React.FC<{ icon: any; label: string; value: React.ReactNode; sub?: React.ReactNode; warning?: string }> = ({ icon: Icon, label, value, sub, warning }) => (
+const StatCard: React.FC<{
+  icon: any;
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  warning?: string;
+  statusBadge?: StatBadge;
+}> = ({ icon: Icon, label, value, sub, warning, statusBadge }) => (
   <div className="bg-slate-50 border rounded-lg p-3">
     <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase">
       <span>{label}</span>
       <Icon className="w-3.5 h-3.5" />
     </div>
-    <div className="text-lg font-black text-slate-800 mt-1">{value}</div>
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="text-lg font-black text-slate-800 mt-1">{value}</div>
+      {statusBadge && (
+        <span className={`inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-[9px] font-bold border ${statusBadge.color}`}>
+          {statusBadge.label}
+        </span>
+      )}
+    </div>
     {sub && <div className="text-[10px] text-slate-500 mt-1">{sub}</div>}
     {warning && (
       <div className="mt-2 text-[9px] leading-snug text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1 font-semibold">
