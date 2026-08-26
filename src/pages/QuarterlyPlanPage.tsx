@@ -2,6 +2,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { FilterBar } from '../components/common/FilterBar';
+import { convertToBeneficiaries } from '../utils/calculations';
 import { PlanEntry, QuarterId } from '../types';
 import { AlertTriangle, CheckCircle2, Wand2 } from 'lucide-react';
 
@@ -32,7 +33,9 @@ export const QuarterlyPlanPage: React.FC = () => {
           measures achievement against this — quarter by quarter — instead of the full-year figure. The annual
           target/budget from Step 1 stays fixed; the "Reconciliation" column shows whether your quarters add up to it.
           A quarter's Budget can never be typed past what's left of the annual budget once the other three quarters
-          are accounted for. All entries are automatically approved and immediately included in aggregates.
+          are accounted for. Each quarter's Beneficiary figure converts that quarter's Target live, using the same
+          UOM conversion factor used everywhere else. All entries are automatically approved and immediately
+          included in aggregates.
         </p>
       </div>
 
@@ -49,7 +52,7 @@ export const QuarterlyPlanPage: React.FC = () => {
                 <th className="p-3 text-right">Annual Target</th>
                 <th className="p-3 text-right">Annual Budget</th>
                 {quarters.map(q => (
-                  <th key={q.id} className="p-2 text-center bg-slate-100 border-l whitespace-nowrap">{q.id} (Tgt | Bgt)</th>
+                  <th key={q.id} className="p-2 text-center bg-slate-100 border-l whitespace-nowrap">{q.id} (Tgt | Bgt | Ben)</th>
                 ))}
                 <th className="p-3 text-center">Reconciliation</th>
               </tr>
@@ -72,7 +75,7 @@ export const QuarterlyPlanPage: React.FC = () => {
 };
 
 const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
-  const { nationalActivities, regions, projects, quarters, quarterlyPlans, upsertQuarterlyPlan } = useApp();
+  const { nationalActivities, regions, projects, quarters, quarterlyPlans, upsertQuarterlyPlan, uomConfigs } = useApp();
   const na = nationalActivities.find(n => n.id === entry.national_activity_id);
   const scopeName = entry.scope_type === 'Regional'
     ? regions.find(r => r.id === entry.region_id)?.name
@@ -137,12 +140,14 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
       <td className="p-3 text-right whitespace-nowrap">{entry.annual_budget.toLocaleString()}</td>
       {quarters.map((q, idx) => {
         const qp = rowPlans[idx];
+        const qTarget = qp?.target ?? 0;
+        const qBeneficiary = na ? convertToBeneficiaries(qTarget, na.uom, uomConfigs) : 0;
         return (
           <td key={q.id} className="p-2 border-l">
-            <div className="flex gap-1 justify-center">
+            <div className="flex gap-1 justify-center items-start">
               <input
                 type="number" min="0"
-                value={qp?.target ?? 0}
+                value={qTarget}
                 onChange={e => setQuarterField(q.id, 'target', e.target.value)}
                 title={`${q.id} Target`}
                 className="w-14 text-center text-[10px] font-bold border border-slate-200 rounded p-1"
@@ -154,6 +159,13 @@ const QuarterlyPlanRow: React.FC<{ entry: PlanEntry }> = ({ entry }) => {
                 title={`${q.id} Budget`}
                 className="w-20 text-center text-[10px] font-bold border border-slate-200 rounded p-1"
               />
+              <div
+                title={`${q.id} Beneficiary — ${qTarget.toLocaleString()} ${na?.uom || ''} × conversion factor`}
+                className="rounded bg-emerald-50 border border-emerald-100 px-1.5 py-1 text-center min-w-16"
+              >
+                <div className="text-[8px] font-black uppercase tracking-wide text-emerald-700 whitespace-nowrap">{q.id} Beneficiary</div>
+                <div className="text-[10px] font-black text-emerald-900">{qBeneficiary.toLocaleString()}</div>
+              </div>
             </div>
           </td>
         );
