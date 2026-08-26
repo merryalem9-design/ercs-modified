@@ -42,7 +42,7 @@ export const Sidebar: React.FC = () => {
     activeRoute,
     setActiveRoute,
     currentRole,
-    nationalActivities,
+    getNationalActivitiesForRole,
     planEntries,
     regions,
     projects,
@@ -81,7 +81,10 @@ export const Sidebar: React.FC = () => {
       : [];
   }, [currentRole, roleScope.kind, roleScope.name, planEntries, regions, projects]);
 
-  const visibleNationalActivities = nationalActivities;
+  // Only the National Activities the current role is an eligible executor
+  // of (all of them for the AOP) — mirrors the Excel data's fixed
+  // Region/Project ↔ National Activity linkage.
+  const visibleNationalActivities = getNationalActivitiesForRole();
 
   const activityChildren = useMemo(() => {
     const byActivity = new Map<

@@ -14,7 +14,7 @@ interface FilterBarProps {
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({ allowNoneScope = false }) => {
-  const { filters, setFilters, resetFilters, currentRole, nationalActivities, regions, projects, quarters } = useApp();
+  const { filters, setFilters, resetFilters, currentRole, getNationalActivitiesForRole, regions, projects, quarters } = useApp();
 
   const isRegionalRole = currentRole.startsWith('Regional Coordinator — ');
   const isProjectRole = currentRole.startsWith('Project Coordinator — ');
@@ -22,7 +22,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({ allowNoneScope = false }) 
   const assignedProjectName = isProjectRole ? currentRole.slice('Project Coordinator — '.length) : '';
   const visibleRegions = isRegionalRole ? regions.filter(r => r.name === assignedRegionName) : regions;
   const visibleProjects = isProjectRole ? projects.filter(p => p.name === assignedProjectName) : projects;
-  const nationalActivitiesInScope = nationalActivities;
+  // Only the National Activities the current role is an eligible executor
+  // of (all of them for the AOP) — mirrors the Excel data's fixed
+  // Region/Project ↔ National Activity linkage.
+  const nationalActivitiesInScope = getNationalActivitiesForRole();
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;

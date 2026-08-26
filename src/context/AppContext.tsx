@@ -1,7 +1,7 @@
 // src/context/AppContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
-  StrategicPriority, NationalActivity, Region, Zone, Project, PlanEntry, Quarter, QuarterId, QuarterlyPlan, QuarterlyActual, UomFactorConfig, FilterState, UserRole,
+  StrategicPriority, NationalActivity, Region, Zone, Project, PlanEntry, Quarter, QuarterId, QuarterlyPlan, QuarterlyActual, UomFactorConfig, FilterState, UserRole, ScopeType,
 } from '../types';
 import {
   INITIAL_STRATEGIC_PRIORITIES, INITIAL_NATIONAL_ACTIVITIES, INITIAL_REGIONS, INITIAL_ZONES, INITIAL_PROJECTS, INITIAL_PLAN_ENTRIES,
@@ -21,10 +21,22 @@ interface AppContextType {
 
   strategicPriorities: StrategicPriority[];
 
-  // Fixed, Excel-sourced reference data — no add/edit/delete. Each one's
-  // Target/Budget is computed live from its linked Plan Entries wherever
-  // it's displayed (see sumTarget/sumBudget in utils/calculations).
+  // National Activities. Target/Budget is always computed live from each
+  // one's linked Plan Entries wherever it's displayed (see sumTarget/
+  // sumBudget in utils/calculations) — never stored here. The National
+  // Activity AOP can create new ones (with the Regions/Projects allowed to
+  // execute them) and delete ones that have zero linked Plan Entries.
   nationalActivities: NationalActivity[];
+  addNationalActivity: (na: NationalActivity) => void;
+  deleteNationalActivity: (id: string) => void;
+  // Used by the Plan Entry wizard's "+ Add Project" flow: a brand-new
+  // Project/Region created on the fly is automatically linked as an
+  // eligible executor of the National Activity it was created under.
+  addEligibleScope: (nationalActivityId: string, scopeType: ScopeType, scopeId: string) => void;
+  // Returns only the National Activities the current role is allowed to
+  // see/act on: every activity for the AOP, or only the ones the assigned
+  // Region/Project is an eligible executor of for a Coordinator.
+  getNationalActivitiesForRole: () => NationalActivity[];
 
   regions: Region[];
   addRegion: (r: Region) => void;
@@ -92,11 +104,12 @@ const normalizePersistedRole = (raw: UserRole, regions: Region[], projects: Proj
   return 'National Activity AOP';
 };
 
-// Bumped to v3: National Activity no longer stores annual_target/annual_budget
-// and can no longer be added/edited/deleted, so any stale v2 localStorage
-// (which may contain user-created National Activities or edited ceilings)
-// should not be carried forward over the fixed Excel-backed reference data.
-const PERSISTENCE_KEY = 'ercs-aop-bottom-up-v3';
+// Bumped to v4: National Activities now carry eligible_region_ids/
+// eligible_project_ids and can be created/deleted by the AOP, so any stale
+// v3 localStorage (missing those fields, or containing National Activities
+// shaped the old way) should not be carried forward over the fixed
+// Excel-backed starter data.
+const PERSISTENCE_KEY = 'ercs-aop-bottom-up-v4';
 
 const readPersisted = <T,>(key: string, fallback: T): T => {
   if (typeof window === 'undefined') return fallback;
@@ -119,8 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedNationalActivityId, setSelectedNationalActivityId] = useState<string | null>(() => readPersisted('selectedNationalActivityId', null));
 
   const [strategicPriorities] = useState<StrategicPriority[]>(INITIAL_STRATEGIC_PRIORITIES);
-  // Fixed reference data — no setter exposed; nothing in the UI can change it.
-  const [nationalActivities] = useState<NationalActivity[]>(INITIAL_NATIONAL_ACTIVITIES);
+  const [nationalActivities, setNationalActivities] = useState<NationalActivity[]>(() => readPersisted('nationalActivities', INITIAL_NATIONAL_ACTIVITIES));
   const [regions, setRegions] = useState<Region[]>(() => readPersisted('regions', INITIAL_REGIONS));
   const [zones, setZones] = useState<Zone[]>(() => readPersisted('zones', INITIAL_ZONES));
   const [projects, setProjects] = useState<Project[]>(() => readPersisted('projects', INITIAL_PROJECTS));
@@ -136,12 +148,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(PERSISTENCE_KEY, JSON.stringify({
-        activeRoute, currentRole, selectedNationalActivityId, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters,
+        activeRoute, currentRole, selectedNationalActivityId, nationalActivities, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters,
       }));
     } catch {
       // localStorage may be unavailable; in-memory state still works for the session.
     }
-  }, [activeRoute, currentRole, selectedNationalActivityId, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters]);
+  }, [activeRoute, currentRole, selectedNationalActivityId, nationalActivities, regions, zones, projects, planEntries, quarterlyPlans, quarterlyActuals, uomConfigs, filters]);
 
   const showToast = (msg: string) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 3000); };
   const resetFilters = () => setFilters(DEFAULT_FILTERS);
@@ -162,6 +174,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   });
 
+  // ---------------------------------------------------------------------
+  // NATIONAL ACTIVITY VISIBILITY — the AOP sees every National Activity.
+  // A Regional/Project Coordinator only sees the ones their exact Region/
+  // Project is an eligible executor of (per eligible_region_ids/
+  // eligible_project_ids) — mirroring the Excel data, where a Region/
+  // Project sheet only ever contained the activities it actually executed.
+  // ---------------------------------------------------------------------
+  const getNationalActivitiesForRole = (): NationalActivity[] => {
+    const scope = parseRoleScope(currentRole, regions, projects);
+    if (scope.kind === 'National') return nationalActivities;
+    if (scope.kind === 'Regional') return nationalActivities.filter(na => na.eligible_region_ids.includes(scope.regionId));
+    return nationalActivities.filter(na => na.eligible_project_ids.includes(scope.projectId));
+  };
+
+  // ---------------------------------------------------------------------
+  // NATIONAL ACTIVITY — create/delete. Only the National Activity AOP
+  // manages these; Regional/Project Coordinators only ever add Plan
+  // Entries against an existing (eligible) one.
+  // ---------------------------------------------------------------------
+  const addNationalActivity = (na: NationalActivity) => {
+    if (parseRoleScope(currentRole, regions, projects).kind !== 'National') {
+      showToast('Only National Activity AOP can create National Activities.');
+      return;
+    }
+    setNationalActivities(prev => [...prev, na]);
+    showToast(`National Activity ${na.code} created. It will appear under "Annual Plan" for its assigned Regions/Projects to submit Plan Entries against.`);
+  };
+
+  const deleteNationalActivity = (id: string) => {
+    if (parseRoleScope(currentRole, regions, projects).kind !== 'National') {
+      showToast('Only National Activity AOP can delete National Activities.');
+      return;
+    }
+    const hasLinkedEntries = planEntries.some(pe => pe.national_activity_id === id);
+    if (hasLinkedEntries) {
+      showToast('This National Activity has linked Plan Entries (Regional or Project) and cannot be deleted.');
+      return;
+    }
+    const na = nationalActivities.find(n => n.id === id);
+    setNationalActivities(prev => prev.filter(n => n.id !== id));
+    showToast(na ? `National Activity ${na.code} deleted.` : 'National Activity deleted.');
+  };
+
+  const addEligibleScope = (nationalActivityId: string, scopeType: ScopeType, scopeId: string) => {
+    setNationalActivities(prev => prev.map(na => {
+      if (na.id !== nationalActivityId) return na;
+      if (scopeType === 'Regional') {
+        return na.eligible_region_ids.includes(scopeId) ? na : { ...na, eligible_region_ids: [...na.eligible_region_ids, scopeId] };
+      }
+      return na.eligible_project_ids.includes(scopeId) ? na : { ...na, eligible_project_ids: [...na.eligible_project_ids, scopeId] };
+    }));
+  };
+
   const addRegion = (r: Region) => { setRegions(prev => [...prev, r]); showToast(`Region ${r.name} added.`); };
   const addZone = (z: Zone) => { setZones(prev => [...prev, z]); showToast(`Zone ${z.name} added.`); };
   const addProject = (p: Project) => { setProjects(prev => [...prev, p]); showToast(`Project ${p.name} added.`); };
@@ -170,19 +235,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // PLAN ENTRY — a National Activity's Target/Budget is always the live sum
   // of its linked Plan Entries, so there is no ceiling to validate against
   // here any more: any non-negative target/budget is acceptable.
-  // National Activity AOP can now also create Plan Entries directly (this
-  // is their only way to enter data now that National Activities are fixed
-  // reference rows with no "Add" flow) — roleOwnsPlanEntry already allows
-  // the National scope to own any Plan Entry.
+  // A Plan Entry may only be added for a Region/Project that is actually
+  // listed as an eligible executor of the target National Activity
+  // (eligible_region_ids/eligible_project_ids) — mirroring the Excel data,
+  // where only certain Regions/Projects executed each activity.
   // ---------------------------------------------------------------------
   const addPlanEntry = (pe: PlanEntry) => {
     if (!roleOwnsPlanEntry(currentRole, pe, regions, projects)) { showToast('This coordinator can only manage entries for their assigned project or region.'); return; }
 
-    setPlanEntries(prev => [...prev, pe]);
     const na = nationalActivities.find(n => n.id === pe.national_activity_id);
-    showToast(na
-      ? `Plan entry added and linked to ${na.code}. ${na.code}'s aggregated Target/Budget updates automatically.`
-      : 'Plan entry added.');
+    if (!na) { showToast('National Activity not found.'); return; }
+
+    const isEligible = pe.scope_type === 'Regional'
+      ? (!!pe.region_id && na.eligible_region_ids.includes(pe.region_id))
+      : (!!pe.project_id && na.eligible_project_ids.includes(pe.project_id));
+    if (!isEligible) {
+      showToast(`${na.code} is not executed by this ${pe.scope_type === 'Regional' ? 'Region' : 'Project'} — only its originally assigned Regions/Projects can add a Plan Entry here.`);
+      return;
+    }
+
+    setPlanEntries(prev => [...prev, pe]);
+    showToast(`Plan entry added and linked to ${na.code}. ${na.code}'s aggregated Target/Budget updates automatically.`);
   };
 
 const updatePlanEntry = (pe: PlanEntry) => {
@@ -240,7 +313,7 @@ const deletePlanEntry = (id: string) => {
       activeRoute, setActiveRoute, currentRole, setCurrentRole, toastMessage, showToast,
       selectedNationalActivityId, setSelectedNationalActivityId,
       strategicPriorities,
-      nationalActivities,
+      nationalActivities, addNationalActivity, deleteNationalActivity, addEligibleScope, getNationalActivitiesForRole,
       regions, addRegion,
       zones, addZone,
       projects, addProject, quarters,

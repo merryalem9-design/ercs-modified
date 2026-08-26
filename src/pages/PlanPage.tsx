@@ -14,7 +14,7 @@ import {
   budgetUtilizationPct,
   convertToBeneficiaries,
 } from '../utils/calculations';
-import { PlanEntry, ScopeType, Project } from '../types';
+import { PlanEntry, ScopeType, Project, NationalActivity } from '../types';
 import { ArrowLeft, ArrowUpRight, ChevronRight, Layers, Plus, Save, Trash2, X } from 'lucide-react';
 
 interface PeWizardFormState {
@@ -36,19 +36,23 @@ interface PeWizardFormState {
 
 export const PlanPage: React.FC = () => {
   const {
-    nationalActivities, regions, projects, deletePlanEntry,
+    nationalActivities, regions, projects, planEntries, deletePlanEntry,
     uomConfigs, quarterlyPlans, quarterlyActuals, filters, getFilteredPlanEntries,
     setSelectedNationalActivityId, setActiveRoute, currentRole,
+    addNationalActivity, deleteNationalActivity, getNationalActivitiesForRole,
   } = useApp();
 
   const [peWizard, setPeWizard] = useState<null | { initial: PeWizardFormState; startStep: 1 | 2 }>(null);
   const [deleteTarget, setDeleteTarget] = useState<null | { id: string; label: string }>(null);
+  const [naFormOpen, setNaFormOpen] = useState(false);
+  const [deleteNaTarget, setDeleteNaTarget] = useState<null | { id: string; label: string }>(null);
 
   const filteredEntries = getFilteredPlanEntries();
   const q = filters.quarterId;
   const isQuarterScoped = q !== 'ALL';
 
   const isCoordinator = currentRole !== 'National Activity AOP';
+  const isAop = !isCoordinator;
   // 'NONE' is a Report-page-only display toggle (see FilterBar's
   // allowNoneScope) — it never restricts which Plan Entries are in scope
   // (see AppContext's getFilteredPlanEntries), so it must be treated the
@@ -66,6 +70,12 @@ export const PlanPage: React.FC = () => {
 
   const canAddPlanEntry = isCoordinator || hasRegionOrProjectFilter;
 
+  // Only the National Activities the current role is an eligible executor
+  // of (all of them for the AOP) — mirrors the Excel data's fixed
+  // Region/Project ↔ National Activity linkage. A Project/Region that was
+  // never originally linked to an activity simply never sees it here.
+  const roleScopedNationalActivities = getNationalActivitiesForRole();
+
   const viewLinkMap = (naId: string) => {
     setSelectedNationalActivityId(naId);
     setActiveRoute('national-detail');
@@ -73,7 +83,7 @@ export const PlanPage: React.FC = () => {
 
   const openAddPlanWizard = () => {
     const naFilterActive = filters.nationalActivityId !== 'ALL';
-    const naId = naFilterActive ? filters.nationalActivityId : (nationalActivities[0]?.id || '');
+    const naId = naFilterActive ? filters.nationalActivityId : (roleScopedNationalActivities[0]?.id || '');
     const na = nationalActivities.find(n => n.id === naId);
 
     const regionalRole = currentRole.startsWith('Regional Coordinator — ');
@@ -131,15 +141,21 @@ export const PlanPage: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------
-  // National-Aggregated rows — one per National Activity, bottom-up summed
-  // from the Plan Entries in scope (never a stored NA-level figure).
+  // National-Aggregated rows — one per National Activity in scope for this
+  // role, bottom-up summed from the Plan Entries in scope (never a stored
+  // NA-level figure).
   // ---------------------------------------------------------------------
-  const naInScope = nationalActivities.filter(na =>
+  const naInScope = roleScopedNationalActivities.filter(na =>
     filters.nationalActivityId === 'ALL' || na.id === filters.nationalActivityId
   );
 
   const aggregatedRows = naInScope.map(na => {
     const naEntries = filteredEntries.filter(pe => pe.national_activity_id === na.id);
+    // Deletion eligibility must look at EVERY Plan Entry linked to this
+    // National Activity, not just the ones matching the current filters —
+    // otherwise a stray Region/Project filter could make an activity look
+    // falsely deletable.
+    const totalLinkedEntries = planEntries.filter(pe => pe.national_activity_id === na.id).length;
     const target = sumPlannedTarget(naEntries, quarterlyPlans, q);
     const actual = sumActual(naEntries, quarterlyActuals, q);
     const budget = sumPlannedBudget(naEntries, quarterlyPlans, q);
@@ -152,7 +168,7 @@ export const PlanPage: React.FC = () => {
     // the planned side here.
     const beneficiaries = convertToBeneficiaries(target, na.uom, uomConfigs);
     const actualBeneficiaries = convertToBeneficiaries(actual, na.uom, uomConfigs);
-    return { na, entryCount: naEntries.length, target, actual, budget, spent, utilization, beneficiaries, actualBeneficiaries, factor };
+    return { na, entryCount: naEntries.length, totalLinkedEntries, target, actual, budget, spent, utilization, beneficiaries, actualBeneficiaries, factor };
   });
 
   const aggregatedTotalBudget = aggregatedRows.reduce((s, r) => s + r.budget, 0);
@@ -191,7 +207,7 @@ export const PlanPage: React.FC = () => {
         <h2 className="text-xl font-black text-slate-800">Step 1 — Annual Plan Data Entry</h2>
         <p className="text-xs text-slate-500 mt-1">
           {showAggregatedView
-            ? "Every National Activity is fixed, Excel-sourced reference data — its Target, Budget and Beneficiaries below are always the live sum of the Plan Entries linked to it, bottom-up, nothing to set and nothing to reconcile. Filter to a Region or Project to see (and add) the execution entries behind these numbers."
+            ? "Every National Activity's Target, Budget and Beneficiaries below are always the live sum of the Plan Entries linked to it, bottom-up, nothing to set and nothing to reconcile. Filter to a Region or Project to see (and add) the execution entries behind these numbers."
             : "Each row below is a Plan Entry — a Region or Project's contribution to a National Activity. Its Target and Budget roll up live into that National Activity's totals. Use the Quarter filter to switch these figures between the full annual plan and a single quarter's Quarterly Plan / Quarterly Actual."}
         </p>
       </div>
@@ -205,11 +221,18 @@ export const PlanPage: React.FC = () => {
             <span>{showAggregatedView ? `National Activities (${aggregatedRows.length})` : `Execution Plan Entries (${executionRows.length})`}</span>
             {isQuarterScoped && <span className="normal-case font-semibold text-slate-400">— {q} figures</span>}
           </div>
-          {canAddPlanEntry && (
-            <button onClick={openAddPlanWizard} className="flex items-center gap-1.5 bg-ercs-red text-white px-3 py-1.5 rounded-lg text-xs font-bold">
-              <Plus className="w-3.5 h-3.5" /> Add Plan Entry
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {showAggregatedView && isAop && (
+              <button onClick={() => setNaFormOpen(true)} className="flex items-center gap-1.5 bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+                <Plus className="w-3.5 h-3.5" /> Add National Activity
+              </button>
+            )}
+            {canAddPlanEntry && (
+              <button onClick={openAddPlanWizard} className="flex items-center gap-1.5 bg-ercs-red text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+                <Plus className="w-3.5 h-3.5" /> Add Plan Entry
+              </button>
+            )}
+          </div>
         </div>
 
         {showAggregatedView ? (
@@ -229,7 +252,7 @@ export const PlanPage: React.FC = () => {
                     <th className="p-3 text-right">Total Beneficiaries</th>
                     <th className="p-3 text-right">Actual Beneficiaries</th>
                     <th className="p-3 text-right">% Utilization</th>
-                    <th className="p-3 text-center">Open</th>
+                    <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -254,9 +277,19 @@ export const PlanPage: React.FC = () => {
                       </td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{row.utilization.toFixed(1)}%</td>
                       <td className="p-3 text-center">
-                        <button onClick={() => viewLinkMap(row.na.id)} className="text-[10px] font-bold text-ercs-red inline-flex items-center gap-0.5">
-                          View <ArrowUpRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center justify-center gap-3">
+                          <button onClick={() => viewLinkMap(row.na.id)} className="text-[10px] font-bold text-ercs-red inline-flex items-center gap-0.5">
+                            View <ArrowUpRight className="w-3 h-3" />
+                          </button>
+                          {isAop && row.totalLinkedEntries === 0 && (
+                            <button
+                              onClick={() => setDeleteNaTarget({ id: row.na.id, label: `${row.na.code} — ${row.na.description}` })}
+                              className="text-[10px] font-bold text-red-600 inline-flex items-center gap-0.5"
+                            >
+                              <Trash2 className="w-3 h-3" /> Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -371,7 +404,135 @@ export const PlanPage: React.FC = () => {
           }}
         />
       )}
+      {naFormOpen && (
+        <NationalActivityFormModal
+          onClose={() => setNaFormOpen(false)}
+          onSaved={() => setNaFormOpen(false)}
+        />
+      )}
+      {deleteNaTarget && (
+        <ConfirmDeleteNAModal
+          label={deleteNaTarget.label}
+          onCancel={() => setDeleteNaTarget(null)}
+          onConfirm={() => {
+            deleteNationalActivity(deleteNaTarget.id);
+            setDeleteNaTarget(null);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+// ============================================================
+// NationalActivityFormModal — National Activity AOP only. Creates a new,
+// fixed-reference-style National Activity with no Target/Budget of its own
+// (those are always entered bottom-up via Plan Entries). The only thing
+// captured here besides the identifying fields is WHICH Regions/Projects
+// are allowed to later add a Plan Entry against it.
+// ============================================================
+const NationalActivityFormModal: React.FC<{ onClose: () => void; onSaved: () => void }> = ({ onClose, onSaved }) => {
+  const { regions, projects, uomConfigs, addNationalActivity } = useApp();
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [uom, setUom] = useState('');
+  const [regionIds, setRegionIds] = useState<string[]>([]);
+  const [projectIds, setProjectIds] = useState<string[]>([]);
+  const savingRef = useRef(false);
+
+  const toggleRegion = (id: string) => setRegionIds(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
+  const toggleProject = (id: string) => setProjectIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+
+  const canSave = !!code.trim() && !!name.trim() && !!description.trim() && !!uom && (regionIds.length > 0 || projectIds.length > 0);
+
+  const handleSave = () => {
+    if (!canSave || savingRef.current) return;
+    savingRef.current = true;
+    const na: NationalActivity = {
+      id: `na-${Date.now()}`,
+      strategic_priority_id: 'sp-1',
+      code: code.trim(),
+      description: name.trim(),
+      uom,
+      responsibility: 'Both',
+      activity_description: description.trim(),
+      eligible_region_ids: regionIds,
+      eligible_project_ids: projectIds,
+    };
+    addNationalActivity(na);
+    onSaved();
+  };
+
+  return (
+    <ModalShell title="Add National Activity" onClose={onClose}>
+      <div className="space-y-4">
+        <LabeledInput label="Activity Code" value={code} onChange={setCode} placeholder="e.g. 6.1.1" />
+        <LabeledInput label="Activity Name" value={name} onChange={setName} placeholder="e.g. Provide Cash Assistance to Flood-Affected Households" />
+        <label className="block">
+          <span className="block text-[10px] font-bold text-slate-500 mb-1">Description</span>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Describe what this National Activity covers"
+            className="w-full text-xs border border-slate-200 rounded p-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-100"
+          />
+        </label>
+        <div>
+          <span className="block text-[10px] font-bold text-slate-500 mb-1">Unit of Measure</span>
+          <select value={uom} onChange={e => setUom(e.target.value)} className="w-full text-xs border border-slate-200 rounded p-2 bg-slate-50">
+            <option value="">Select unit of measure…</option>
+            {uomConfigs.map(c => <option key={c.uom} value={c.uom}>{c.uom}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <span className="block text-[10px] font-bold text-slate-500 mb-2">
+            Executed By — select every Region and/or Project that should be able to submit a Plan Entry against this National Activity
+          </span>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[9px] uppercase font-extrabold text-slate-400 mb-1">Regions</div>
+              <div className="space-y-1">
+                {regions.map(r => (
+                  <label key={r.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 border rounded px-2 py-1.5 cursor-pointer">
+                    <input type="checkbox" checked={regionIds.includes(r.id)} onChange={() => toggleRegion(r.id)} />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[9px] uppercase font-extrabold text-slate-400 mb-1">Projects</div>
+              <div className="space-y-1">
+                {projects.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 border rounded px-2 py-1.5 cursor-pointer">
+                    <input type="checkbox" checked={projectIds.includes(p.id)} onChange={() => toggleProject(p.id)} />
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          {regionIds.length === 0 && projectIds.length === 0 && (
+            <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 font-semibold">
+              Select at least one Region or Project — only they will be able to add a Plan Entry against this activity.
+            </div>
+          )}
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[11px] text-blue-800 font-semibold">
+          No Target or Budget is set here — those are entered bottom-up by each selected Region/Project when they add their own Plan Entry against this activity. Until they do, this activity will show "No linked execution entries yet." under Annual Plan.
+        </div>
+
+        <div className="flex justify-end">
+          <button disabled={!canSave} onClick={handleSave} className="bg-ercs-red text-white px-5 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-40">
+            <Save className="w-3.5 h-3.5" /> Save National Activity
+          </button>
+        </div>
+      </div>
+    </ModalShell>
   );
 };
 
@@ -385,7 +546,7 @@ export const PlanEntryWizardModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ initial, startStep, onClose, onSaved }) => {
-  const { nationalActivities, regions, projects, addProject, planEntries, addPlanEntry, updatePlanEntry, currentRole } = useApp();
+  const { nationalActivities, regions, projects, addProject, addEligibleScope, planEntries, addPlanEntry, updatePlanEntry, currentRole } = useApp();
   const [step, setStep] = useState<1 | 2>(startStep);
   const [form, setForm] = useState<PeWizardFormState>(initial);
   const [addingProject, setAddingProject] = useState(false);
@@ -402,8 +563,29 @@ export const PlanEntryWizardModal: React.FC<{
   const assignedProject = projectRole ? projects.find(p => p.name === currentRole.slice('Project Coordinator — '.length)) : undefined;
   const effectiveScope = form.scope_type;
 
-  const naOptions = nationalActivities;
+  // When the execution scope is already fixed (by role or an active
+  // filter), only offer National Activities that actually list that exact
+  // Region/Project as an eligible executor — mirrors the Excel data's
+  // fixed Project/Region ↔ National Activity linkage instead of letting
+  // any scope attach to any activity.
+  const naOptions = scopeLocked
+    ? nationalActivities.filter(na => effectiveScope === 'Regional'
+        ? (!form.region_id || na.eligible_region_ids.includes(form.region_id))
+        : (!form.project_id || na.eligible_project_ids.includes(form.project_id)))
+    : nationalActivities;
   const selectedNa = nationalActivities.find(na => na.id === form.national_activity_id);
+
+  // Once a National Activity is chosen, only its originally assigned
+  // Regions/Projects may be picked as the executing scope in Step 2.
+  const eligibleRegions = selectedNa ? regions.filter(r => selectedNa.eligible_region_ids.includes(r.id)) : regions;
+  const eligibleProjects = selectedNa ? projects.filter(p => selectedNa.eligible_project_ids.includes(p.id)) : projects;
+  const regionScopeAvailable = !selectedNa || selectedNa.eligible_region_ids.length > 0;
+  const projectScopeAvailable = !selectedNa || selectedNa.eligible_project_ids.length > 0;
+  const isEligibleScope = !!selectedNa && (
+    effectiveScope === 'Regional'
+      ? (!!form.region_id && selectedNa.eligible_region_ids.includes(form.region_id))
+      : (!!form.project_id && selectedNa.eligible_project_ids.includes(form.project_id))
+  );
 
   const siblingEntries = selectedNa ? planEntries.filter(pe => pe.national_activity_id === selectedNa.id && pe.id !== form.id) : [];
   const siblingTarget = sumTarget(siblingEntries);
@@ -426,7 +608,7 @@ export const PlanEntryWizardModal: React.FC<{
   const canSave =
     !!form.national_activity_id &&
     !!effectiveScope &&
-    (effectiveScope === 'Regional' ? !!form.region_id : !!form.project_id) &&
+    isEligibleScope &&
     !!form.activity_name.trim() &&
     !!form.activity_description.trim() &&
     numbersValid &&
@@ -448,6 +630,10 @@ export const PlanEntryWizardModal: React.FC<{
     if (!name) return;
     const project: Project = { id: `proj-${Date.now()}`, name };
     addProject(project);
+    // The user is explicitly creating this Project to execute the currently
+    // selected National Activity, so link it as an eligible executor right
+    // away — otherwise it could never be saved on this entry.
+    if (selectedNa) addEligibleScope(selectedNa.id, 'Project', project.id);
     setForm(f => ({ ...f, project_id: project.id }));
     setNewProjectName('');
     setAddingProject(false);
@@ -497,6 +683,11 @@ export const PlanEntryWizardModal: React.FC<{
               {naOptions.map(na => <option key={na.id} value={na.id}>{na.code} — {na.description}</option>)}
             </select>
             {isEditing && <div className="text-[10px] text-slate-400 mt-1">The parent link is fixed while editing an existing entry.</div>}
+            {!isEditing && scopeLocked && naOptions.length === 0 && (
+              <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-1 font-semibold">
+                No National Activity is currently assigned to this Region/Project. Ask the National Activity AOP to link it to one first.
+              </div>
+            )}
           </div>
 
           {selectedNa && (
@@ -538,7 +729,7 @@ export const PlanEntryWizardModal: React.FC<{
                   key={st}
                   type="button"
                   onClick={() => scopeLocked ? undefined : setForm(f => ({ ...f, scope_type: st, region_id: '', project_id: '', activity_name: '' }))}
-                  disabled={scopeLocked && effectiveScope !== st}
+                  disabled={(scopeLocked && effectiveScope !== st) || (st === 'Regional' && !regionScopeAvailable) || (st === 'Project' && !projectScopeAvailable)}
                   className={`flex-1 py-2 rounded text-xs font-bold border ${effectiveScope === st ? 'bg-ercs-red text-white border-ercs-red' : 'bg-slate-50 text-slate-600'} disabled:opacity-40`}
                 >
                   {st}
@@ -552,8 +743,11 @@ export const PlanEntryWizardModal: React.FC<{
               <span className="block text-[10px] font-bold text-slate-500 mb-1">Region</span>
               <select value={form.region_id} onChange={e => setForm(f => ({ ...f, region_id: e.target.value }))} disabled={scopeLocked} className="w-full text-xs border rounded p-2 bg-slate-50 disabled:opacity-60">
                 <option value="">Select region…</option>
-                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {eligibleRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
+              {eligibleRegions.length === 0 && (
+                <div className="text-[10px] text-amber-700 mt-1 font-semibold">{selectedNa.code} has no Region assigned to execute it.</div>
+              )}
             </div>
           )}
           {effectiveScope === 'Project' && (
@@ -564,8 +758,11 @@ export const PlanEntryWizardModal: React.FC<{
               </div>
               <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} disabled={scopeLocked} className="w-full text-xs border rounded p-2 bg-slate-50 disabled:opacity-60">
                 <option value="">Select project…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {eligibleProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
+              {eligibleProjects.length === 0 && (
+                <div className="text-[10px] text-amber-700 mt-1 font-semibold">{selectedNa.code} has no Project assigned to execute it.</div>
+              )}
               {addingProject && !scopeLocked && (
                 <div className="mt-2 flex gap-1.5">
                   <input
@@ -618,6 +815,11 @@ export const PlanEntryWizardModal: React.FC<{
           {isDuplicateLink && (
             <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-[11px] text-rose-700 font-semibold">
               This {effectiveScope === 'Regional' ? 'Region' : 'Project'} is already linked to {selectedNa.code}. Pick a different {effectiveScope === 'Regional' ? 'Region' : 'Project'}, or close this wizard and edit the existing entry instead — two entries for the same {effectiveScope === 'Regional' ? 'Region' : 'Project'} would double-count its contribution.
+            </div>
+          )}
+          {!isDuplicateLink && !isEligibleScope && (!!form.region_id || !!form.project_id) && (
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-[11px] text-rose-700 font-semibold">
+              {selectedNa.code} is only executed by its originally assigned Regions/Projects. This {effectiveScope === 'Regional' ? 'Region' : 'Project'} isn't one of them, so a Plan Entry can't be linked here.
             </div>
           )}
           {!numbersValid && (
@@ -696,6 +898,22 @@ export const ConfirmDeleteModal: React.FC<{ label: string; onCancel: () => void;
     <div className="bg-white max-w-md w-full rounded-xl shadow-2xl p-5">
       <div className="flex items-center gap-2 text-red-700 font-black text-sm"><Trash2 className="w-5 h-5" /> Delete "{label}"?</div>
       <p className="text-xs text-slate-600 mt-3">This also removes any linked Quarterly Plan and Quarterly Actual records. The parent National Activity's aggregated Target and Budget recalculate automatically — they're always the live sum of its linked Plan Entries.</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onCancel} className="px-4 py-2 rounded-lg border text-xs font-bold">Cancel</button>
+        <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-bold">Delete</button>
+      </div>
+    </div>
+  </div>
+);
+
+// National Activity deletion is only ever offered when it has zero linked
+// Plan Entries (see the "Actions" column above), so this confirmation is
+// simpler than ConfirmDeleteModal — there's nothing cascading to warn about.
+const ConfirmDeleteNAModal: React.FC<{ label: string; onCancel: () => void; onConfirm: () => void }> = ({ label, onCancel, onConfirm }) => (
+  <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+    <div className="bg-white max-w-md w-full rounded-xl shadow-2xl p-5">
+      <div className="flex items-center gap-2 text-red-700 font-black text-sm"><Trash2 className="w-5 h-5" /> Delete "{label}"?</div>
+      <p className="text-xs text-slate-600 mt-3">This National Activity has no linked Plan Entries, so it can be safely removed. This cannot be undone.</p>
       <div className="mt-5 flex justify-end gap-2">
         <button onClick={onCancel} className="px-4 py-2 rounded-lg border text-xs font-bold">Cancel</button>
         <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-bold">Delete</button>

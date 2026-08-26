@@ -4,9 +4,10 @@
 // The goal at this stage is to make one pipeline crystal clear:
 //
 //   Strategic Priority (grouping)
-//     -> National Activity (FIXED reference data — code/description/uom only;
-//                            its Target and Budget are never stored, they are
-//                            always the live sum of its linked Plan Entries)
+//     -> National Activity (code/description/uom + which Regions/Projects
+//                            are allowed to execute it; its Target and
+//                            Budget are never stored, they are always the
+//                            live sum of its linked Plan Entries)
 //       -> Plan Entry (data entry — the annual target/budget for a
 //                       Region/Project executing against a National Activity)
 //         -> Quarterly Plan (data entry — Q1-Q4 breakdown of that Plan
@@ -49,11 +50,16 @@ export interface Zone {
 }
 
 /**
- * The top-level "what" — a National Activity. This is FIXED, Excel-sourced
- * reference data: no annual_target/annual_budget is stored here. Its
- * aggregate Target and Budget are always computed live as the sum of the
- * Plan Entries linked to it (see sumTarget/sumBudget in utils/calculations).
- * There is nothing to set and nothing that can ever get out of sync.
+ * The top-level "what" — a National Activity. No annual_target/annual_budget
+ * is stored here — its aggregate Target and Budget are always computed live
+ * as the sum of the Plan Entries linked to it (see sumTarget/sumBudget in
+ * utils/calculations). There is nothing to set and nothing that can ever get
+ * out of sync.
+ *
+ * The National Activity AOP can create new National Activities (see
+ * `eligible_region_ids`/`eligible_project_ids` below) and delete ones that
+ * have zero linked Plan Entries. A National Activity that already has one or
+ * more linked Plan Entries (Regional or Project) can never be deleted.
  */
 export interface NationalActivity {
   id: string;
@@ -71,6 +77,23 @@ export interface NationalActivity {
    * Name/title) — this is the longer explanatory text.
    */
   activity_description: string;
+  /**
+   * Which Regions/Projects are allowed to submit a Plan Entry against this
+   * National Activity. For the 10 original Excel-sourced activities this is
+   * derived from which Region/Project sheets actually contained a row for
+   * that activity. For a National Activity created through the "Add
+   * National Activity" flow, this is exactly whatever the AOP selected at
+   * creation time (plus anything added later via "+ Add Project" inside the
+   * Plan Entry wizard).
+   *
+   * This is what makes the Annual Plan / sidebar navigation, and the "Add
+   * Plan Entry" wizard, show only the National Activities that are actually
+   * relevant to a given Region/Project Coordinator — a Project/Region that
+   * was never linked to an activity in the source data can't spontaneously
+   * add a Plan Entry under it.
+   */
+  eligible_region_ids: string[];
+  eligible_project_ids: string[];
 }
 
 export interface Project { id: string; name: string; }
